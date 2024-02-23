@@ -2,7 +2,7 @@ use crate::Expressable;
 
 use super::{Add, ExprKind, Expression, Mul, Tree};
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub struct Var {
     pub(crate) id: usize,
 }

@@ -2,7 +2,7 @@ pub mod expression;
 
 pub use expression::*;
 
-use crate::tree::{NodeId, Tree, TreeElement};
+use crate::tree::{NodeId, Tree};
 pub mod tree;
 
 #[derive(Default, Clone, Debug)]
@@ -33,24 +33,15 @@ impl System {
         let exp: Expression = exp.into();
         let mut f = String::new();
         fn write_children(vars: &[String], tree: &Tree, id: NodeId, f: &mut String) {
-            for child in tree.node(id).children_with_leaves(tree) {
-                match child {
-                    TreeElement::Leaf(l) => {
-                        match tree.leaf(l).kind {
-                            ExprKind::Var(x) => *f += &vars[x.id],
-                            ExprKind::Const(c) => f.push_str(&c.to_string()),
-                            _ => *f += ":",
-                        };
-                    }
-                    TreeElement::Node(n) => {
-                        match tree.node(n).kind {
-                            ExprKind::Add => *f += "+",
-                            ExprKind::Mul => *f += "*",
-                            _ => *f += ":",
-                        };
-                        write_children(vars, tree, n, f)
-                    }
-                }
+            match tree.node(id).kind() {
+                ExprKind::Var(x) => *f += &vars[x.id],
+                ExprKind::Const(c) => f.push_str(&c.to_string()),
+                ExprKind::Add => *f += "+",
+                ExprKind::Mul => *f += "*",
+                ExprKind::ROOT => *f += ":",
+            }
+            for &child in tree.node(id).children() {
+                write_children(vars, tree, child, f)
             }
         }
         write_children(&self.variables, &exp.tree, NodeId::ROOT, &mut f);

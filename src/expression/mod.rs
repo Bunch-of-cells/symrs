@@ -10,144 +10,141 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn d(self, x: Var) -> Expression {
-        fn d_inner(tree: &Tree, id: NodeId, x: Var) -> Option<Tree> {
-            match tree.node(id).kind {
-                ExprKind::Root => {
-                    let mut new_tree = Tree::new();
-                    for child in tree.node(id).children_with_leaves(tree) {
-                        if let Some(tre) = match child {
-                            TreeElement::Leaf(l) => match tree.leaf(l).kind {
-                                ExprKind::Var(ref v) => {
-                                    if v.id == x.id {
-                                        Some({
-                                            let mut tree = Tree::new();
-                                            tree.push(ExprKind::Const(1.0));
-                                            tree
-                                        })
-                                    } else {
-                                        None
-                                    }
-                                }
-                                ExprKind::Const(_) => None,
-                                _ => unreachable!(),
-                            },
-                            TreeElement::Node(n) => d_inner(tree, n, x.clone()),
-                        } {
-                            new_tree.push_tree(tre);
-                        }
-                    }
-                    if new_tree
-                        .node(NodeId::ROOT)
-                        .children_with_leaves(&new_tree)
-                        .next()
-                        .is_none()
-                    {
-                        None
-                    } else {
-                        Some(new_tree)
-                    }
-                }
-                ExprKind::Add => {
-                    let mut trees = tree
-                        .node(id)
-                        .children()
-                        .iter()
-                        .filter_map(|&id| d_inner(tree, id, x.clone()))
-                        .collect::<Vec<_>>();
-
-                    match trees[..] {
-                        [_] | [] => trees.pop(),
-                        _ => {
-                            let mut tree = Tree::new();
-                            tree.start_node(ExprKind::Add);
-                            for tre in trees {
-                                tree.push_tree(tre);
-                            }
-                            Some(tree)
-                        }
-                    }
-                }
-                ExprKind::Mul => {
-                    let children = tree.node(id).children();
-                    let mut trees = children
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, &id)| d_inner(tree, id, x.clone()).map(|d| (i, d)))
-                        .map(|(i, d)| {
-                            let mut new_tree = Tree::new();
-                            new_tree.start_node(ExprKind::Mul);
-                            new_tree.push_tree(d);
-                            for (j, child) in children.iter().enumerate() {
-                                if i == j {
-                                    continue;
-                                }
-                                new_tree.push_tree(recreate_node(tree, *child));
-                            }
-                            new_tree.finish_node();
-                            new_tree
-                        })
-                        .collect::<Vec<_>>();
-
-                    match trees[..] {
-                        [_] | [] => trees.pop(),
-                        _ => {
-                            let mut tree = Tree::new();
-                            tree.start_node(ExprKind::Add);
-                            for tre in trees {
-                                tree.push_tree(tre);
-                            }
-                            Some(tree)
-                        }
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        fn recreate_node(tree: &Tree, id: NodeId) -> Tree {
-            match tree.node(id).kind {
-                ExprKind::Root => {
-                    let mut new_tree = Tree::new();
-                    for child in tree.node(id).children_with_leaves(tree) {
-                        new_tree.push_tree(match child {
-                            TreeElement::Leaf(l) => {
-                                let mut new_tree = Tree::new();
-                                new_tree.push(tree.leaf(l).kind);
-                                new_tree
-                            }
-                            TreeElement::Node(n) => recreate_node(tree, n),
-                        });
-                    }
-                    new_tree
-                }
-                kind @ (ExprKind::Add | ExprKind::Mul) => {
-                    let mut new_tree = Tree::new();
-                    new_tree.start_node(kind);
-                    for tre in tree
-                        .node(id)
-                        .children()
-                        .iter()
-                        .map(|&id| recreate_node(tree, id))
-                    {
-                        new_tree.push_tree(tre);
-                    }
-                    new_tree
-                }
-                _ => unreachable!(),
-            }
-        }
+    pub fn diff(&self, x: Var) -> Expression {
         Expression {
-            tree: d_inner(&self.tree, NodeId::ROOT, x).unwrap_or_default(),
+            tree: self.d_inner(NodeId::ROOT, x).unwrap_or_default(),
         }
+    }
+
+    fn d_inner(&self, id: NodeId, x: Var) -> Option<Tree> {
+        match self.tree.node(id).kind {
+            ExprKind::ROOT => {
+                let mut trees = self
+                    .tree
+                    .node(id)
+                    .children()
+                    .iter()
+                    .filter_map(|&id| self.d_inner(id, x))
+                    .collect::<Vec<_>>();
+
+                match trees[..] {
+                    [_] | [] => trees.pop(),
+                    _ => {
+                        let mut tree = Tree::new();
+                        for tre in trees {
+                            tree.push_tree(tre);
+                        }
+                        Some(tree)
+                    }
+                }
+            }
+            ExprKind::Add => {
+                let mut trees = self
+                    .tree
+                    .node(id)
+                    .children()
+                    .iter()
+                    .filter_map(|&id| self.d_inner(id, x))
+                    .collect::<Vec<_>>();
+
+                match trees[..] {
+                    [_] | [] => trees.pop(),
+                    _ => {
+                        let mut tree = Tree::new();
+                        tree.start_node(ExprKind::Add);
+                        for tre in trees {
+                            tree.push_tree(tre);
+                        }
+                        tree.finish_node();
+                        Some(tree)
+                    }
+                }
+            }
+            ExprKind::Mul => {
+                let children = self.tree.node(id).children();
+                let mut trees = children
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, &id)| self.d_inner(id, x).map(|d| (i, d)))
+                    .map(|(i, d)| {
+                        let mut new_tree = Tree::new();
+                        new_tree.start_node(ExprKind::Mul);
+                        new_tree.push_tree(d);
+                        for (j, child) in children.iter().enumerate() {
+                            if i == j {
+                                continue;
+                            }
+                            new_tree.push_tree(self.treeify_node(*child));
+                        }
+                        new_tree.finish_node();
+                        new_tree
+                    })
+                    .collect::<Vec<_>>();
+
+                match trees[..] {
+                    [_] | [] => trees.pop(),
+                    _ => {
+                        let mut tree = Tree::new();
+                        tree.start_node(ExprKind::Add);
+                        for tre in trees {
+                            tree.push_tree(tre);
+                        }
+                        tree.finish_node();
+                        Some(tree)
+                    }
+                }
+            }
+            ExprKind::Var(v) if v.id == x.id => {
+                let mut new_tree = Tree::new();
+                new_tree.push(ExprKind::Const(1.0));
+                Some(new_tree)
+            }
+            _ => None,
+        }
+    }
+
+    fn treeify_node(&self, id: NodeId) -> Tree {
+        match self.tree.node(id).kind {
+            ExprKind::ROOT => {
+                let mut new_tree = Tree::new();
+                for &child in self.tree.node(id).children() {
+                    new_tree.push_tree(self.treeify_node(child));
+                }
+                new_tree
+            }
+            x @ (ExprKind::Var(_) | ExprKind::Const(_)) => {
+                let mut new_tree = Tree::new();
+                new_tree.push(x);
+                new_tree
+            }
+            kind @ (ExprKind::Add | ExprKind::Mul) => {
+                let mut new_tree = Tree::new();
+                new_tree.start_node(kind);
+                for tre in self
+                    .tree
+                    .node(id)
+                    .children()
+                    .iter()
+                    .map(|&id| self.treeify_node(id))
+                {
+                    new_tree.push_tree(tre);
+                }
+                new_tree.finish_node();
+                new_tree
+            }
+        }
+    }
+
+    pub fn simplify(self) -> ExprKind {
+        todo!()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ExprKind {
+    ROOT,
     Var(Var),
     Const(f64),
-    Root,
     Add,
     Mul,
 }
