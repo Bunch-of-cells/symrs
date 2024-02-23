@@ -1,9 +1,10 @@
 pub mod expression;
-
-pub use expression::*;
+pub mod matrix;
+pub mod tree;
 
 use crate::tree::{NodeId, Tree};
-pub mod tree;
+pub use expression::*;
+pub use matrix::*;
 
 #[derive(Default, Clone, Debug)]
 pub struct System {
@@ -29,22 +30,62 @@ impl System {
         Ok(vars)
     }
 
-    pub fn str<T: Expressable>(&self, exp: T) -> String {
-        let exp: Expression = exp.into();
+    pub fn str<T: Expressable>(&self, exp: &T) -> String {
+        let exp: Expression = exp.clone().into();
         let mut f = String::new();
         fn write_children(vars: &[String], tree: &Tree, id: NodeId, f: &mut String) {
             match tree.node(id).kind() {
                 ExprKind::Var(x) => *f += &vars[x.id],
                 ExprKind::Const(c) => f.push_str(&c.to_string()),
-                ExprKind::Add => *f += "+",
-                ExprKind::Mul => *f += "*",
-                ExprKind::ROOT => *f += ":",
-            }
-            for &child in tree.node(id).children() {
-                write_children(vars, tree, child, f)
+                ExprKind::Add => {
+                    *f += "(";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    for &child in iter {
+                        *f += "+";
+                        write_children(vars, tree, child, f);
+                    }
+                    *f += ")";
+                }
+                ExprKind::Mul => {
+                    *f += " ";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    for &child in iter {
+                        *f += "*";
+                        write_children(vars, tree, child, f);
+                    }
+                    *f += " ";
+                }
+                ExprKind::Pow => {
+                    *f += " ";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    *f += "^";
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    assert!(iter.next().is_none());
+                    *f += " ";
+                }
+                ExprKind::ROOT => {
+                    for &child in tree.node(id).children() {
+                        write_children(vars, tree, child, f);
+                    }
+                }
             }
         }
         write_children(&self.variables, &exp.tree, NodeId::ROOT, &mut f);
+        f
+    }
+
+    pub fn strmat<const N: usize>(&self, mat: &SqMatrix<N>) -> String {
+        let mut f = String::new();
+        for x in mat.0.iter() {
+            f += "[";
+            for x in x.iter() {
+                f.push_str(&format!("{:5}", self.str(x)));
+            }
+            f += "]\n";
+        }
         f
     }
 }

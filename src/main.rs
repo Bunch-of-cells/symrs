@@ -1,10 +1,15 @@
-use symrs::System;
+use symrs::{Expressable, SqMatrix, System};
 
 fn main() {
     let mut sys = System::default();
-    let [x, y, z] = sys.symbols("x y z").unwrap();
-    let a = x * 2.0 + y;
-    println!("{}", sys.str(a.simplify()));
-    let w = a.diff(z).simplify();
-    println!("{}", sys.str(w.clone()));
+    let [x] = sys.symbols("x").unwrap();
+    let g = SqMatrix([
+        [x.ex(), 0.0.ex()],
+        [0.0.ex(), x.ex()],
+    ]);
+    println!("{}", sys.strmat(&g));
+    println!("{}", sys.strmat(&g.diff(x)));
+    let a = 2.0.ex() * x;
+    let w = a.diff(x);
+    println!("{}", sys.str(&w.simplify()));
 }
