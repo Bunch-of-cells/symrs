@@ -16,6 +16,12 @@ impl Expression {
         }
     }
 
+    pub fn simplify(&self) -> Expression {
+        Expression {
+            tree: self.simplify_inner(NodeId::ROOT),
+        }
+    }
+
     fn d_inner(&self, id: NodeId, x: Var) -> Option<Tree> {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
@@ -74,7 +80,7 @@ impl Expression {
                             if i == j {
                                 continue;
                             }
-                            new_tree.push_tree(self.treeify_node(*child));
+                            new_tree.push_tree(treeify_node(&self.tree, *child));
                         }
                         new_tree.finish_node();
                         new_tree
@@ -99,16 +105,20 @@ impl Expression {
                 new_tree.push(ExprKind::Const(1.0));
                 Some(new_tree)
             }
-            _ => None,
+            ExprKind::Var(_) | ExprKind::Const(_) => {
+                let mut new_tree = Tree::new();
+                new_tree.push(ExprKind::Const(0.0));
+                Some(new_tree)
+            } // _ => None,
         }
     }
 
-    fn treeify_node(&self, id: NodeId) -> Tree {
+    pub fn simplify_inner(&self, id: NodeId) -> Tree {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
                 let mut new_tree = Tree::new();
                 for &child in self.tree.node(id).children() {
-                    new_tree.push_tree(self.treeify_node(child));
+                    new_tree.push_tree(self.simplify_inner(child));
                 }
                 new_tree
             }
@@ -117,26 +127,84 @@ impl Expression {
                 new_tree.push(x);
                 new_tree
             }
-            kind @ (ExprKind::Add | ExprKind::Mul) => {
-                let mut new_tree = Tree::new();
-                new_tree.start_node(kind);
-                for tre in self
+            ExprKind::Add => {
+                let mut trees = Vec::new();
+                for tree in self
                     .tree
                     .node(id)
                     .children()
                     .iter()
-                    .map(|&id| self.treeify_node(id))
+                    .map(|&id| self.simplify_inner(id))
+                    .filter(|tree| match tree.root().children()[..] {
+                        [id] => tree.node(id).kind != ExprKind::Const(0.0),
+                        _ => true,
+                    })
                 {
-                    new_tree.push_tree(tre);
+                    trees.push(tree);
                 }
-                new_tree.finish_node();
-                new_tree
+                match trees.len() {
+                    0 => {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(0.0));
+                        new_tree
+                    }
+                    1 => trees.pop().unwrap(),
+                    _ => {
+                        let mut new_tree = Tree::new();
+                        new_tree.start_node(ExprKind::Add);
+                        for tree in trees {
+                            new_tree.push_tree(tree);
+                        }
+                        new_tree.finish_node();
+                        new_tree
+                    }
+                }
+            }
+            ExprKind::Mul => {
+                let mut trees = Vec::new();
+                for tree in self
+                    .tree
+                    .node(id)
+                    .children()
+                    .iter()
+                    .map(|&id| self.simplify_inner(id))
+                    .filter(|tree| match tree.root().children()[..] {
+                        [id] => tree.node(id).kind != ExprKind::Const(1.0),
+                        _ => true,
+                    })
+                {
+                    match tree.root().children()[..] {
+                        [id] if tree.node(id).kind == ExprKind::Const(0.0) => {
+                            trees.clear();
+                            trees.push({
+                                let mut tree = Tree::new();
+                                tree.push(ExprKind::Const(0.0));
+                                tree
+                            });
+                            break;
+                        }
+                        _ => trees.push(tree),
+                    }
+                }
+                match trees.len() {
+                    0 => {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(0.0));
+                        new_tree
+                    }
+                    1 => trees.pop().unwrap_or_default(),
+                    _ => {
+                        let mut new_tree = Tree::new();
+                        new_tree.start_node(ExprKind::Mul);
+                        for tree in trees {
+                            new_tree.push_tree(tree);
+                        }
+                        new_tree.finish_node();
+                        new_tree
+                    }
+                }
             }
         }
-    }
-
-    pub fn simplify(self) -> ExprKind {
-        todo!()
     }
 }
 
@@ -187,5 +255,36 @@ where
         tree.push_tree(rhs.into().tree);
         tree.finish_node();
         Expression { tree }
+    }
+}
+
+fn treeify_node(tree: &Tree, id: NodeId) -> Tree {
+    match tree.node(id).kind {
+        ExprKind::ROOT => {
+            let mut new_tree = Tree::new();
+            for &child in tree.node(id).children() {
+                new_tree.push_tree(treeify_node(tree, child));
+            }
+            new_tree
+        }
+        x @ (ExprKind::Var(_) | ExprKind::Const(_)) => {
+            let mut new_tree = Tree::new();
+            new_tree.push(x);
+            new_tree
+        }
+        kind @ (ExprKind::Add | ExprKind::Mul) => {
+            let mut new_tree = Tree::new();
+            new_tree.start_node(kind);
+            for tre in tree
+                .node(id)
+                .children()
+                .iter()
+                .map(|&id| treeify_node(tree, id))
+            {
+                new_tree.push_tree(tre);
+            }
+            new_tree.finish_node();
+            new_tree
+        }
     }
 }
