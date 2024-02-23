@@ -2,7 +2,7 @@ use symrs::{Expressable, Expression, SqMatrix, System, Var};
 
 fn main() {
     let mut sys = System::default();
-    let x = sys.symbols::<2>("r θ").unwrap();
+    let x = sys.symbols::<2>("x y").unwrap();
     let g = SqMatrix([
         [1.0.ex(), 0.0.ex()],
         [0.0.ex(), 1.0.ex()]
