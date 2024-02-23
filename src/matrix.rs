@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
 use crate::{Expressable, Expression, Var};
 
@@ -90,8 +90,8 @@ impl<const N: usize> Mul for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn mul(self, rhs: Self) -> Self::Output {
         let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
-        for (i, c) in c.iter_mut().enumerate().take(N) {
-            for (j, c) in c.iter_mut().enumerate().take(N) {
+        for (i, c) in c.iter_mut().enumerate() {
+            for (j, c) in c.iter_mut().enumerate() {
                 let mut sum = 0.0.ex();
                 for k in 0..N {
                     sum = sum + self.0[i][k].clone() * rhs.0[k][j].clone();
@@ -107,8 +107,8 @@ impl<const N: usize> Add for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn add(self, rhs: Self) -> Self::Output {
         let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
-        for (i, c) in c.iter_mut().enumerate().take(N) {
-            for (j, c) in c.iter_mut().enumerate().take(N) {
+        for (i, c) in c.iter_mut().enumerate() {
+            for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() + rhs.0[i][j].clone();
             }
         }
@@ -120,8 +120,8 @@ impl<const N: usize> Sub for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn sub(self, rhs: Self) -> Self::Output {
         let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
-        for (i, c) in c.iter_mut().enumerate().take(N) {
-            for (j, c) in c.iter_mut().enumerate().take(N) {
+        for (i, c) in c.iter_mut().enumerate() {
+            for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() - rhs.0[i][j].clone();
             }
         }
@@ -133,11 +133,24 @@ impl<const N: usize, T: Expressable> Mul<T> for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn mul(self, rhs: T) -> Self::Output {
         let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
-        for (i, c) in c.iter_mut().enumerate().take(N) {
-            for (j, c) in c.iter_mut().enumerate().take(N) {
+        for (i, c) in c.iter_mut().enumerate() {
+            for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() * rhs.clone();
             }
         }
         SqMatrix(c)
+    }
+}
+
+impl<const N: usize> Index<usize> for SqMatrix<N> {
+    type Output = [Expression; N];
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<const N: usize> IndexMut<usize> for SqMatrix<N> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
     }
 }

@@ -119,12 +119,17 @@ impl Expression {
                 let base_tree = treeify_node(&self.tree, base);
                 let exp_tree = treeify_node(&self.tree, exp);
 
-                match self.d_inner(exp, x) {
+                let d_exp = self.d_inner(exp, x);
+                match d_exp {
                     None => (),
-                    Some(d_exp)
+                    Some(d_exp) => {
+                        let d_exp = Expression { tree: d_exp }.simplify().tree;
                         if d_exp.node(*d_exp.root().children().first().unwrap()).kind
-                            == ExprKind::Const(0.0) => {}
-                    _ => panic!("NOT IMPLEMENTING LOG"),
+                            != ExprKind::Const(0.0)
+                        {
+                            panic!("NOT IMPLEMENTING LOG")
+                        }
+                    }
                 }
                 let d_base = self.d_inner(base, x)?;
 
