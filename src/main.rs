@@ -3,12 +3,11 @@ use symrs::{Expressable, Expression, SqMatrix, System, Var};
 fn main() {
     let mut sys = System::default();
     let x = sys.symbols::<2>("x y").unwrap();
-    let g = SqMatrix([
-        [1.0.ex(), 0.0.ex()],
-        [0.0.ex(), 1.0.ex()]
-    ]);
+    let a = 1.0.ex().pow(2.0.ex());
+    println!("{}", sys.str(&a.simplify()));
+    let g = SqMatrix([[(-1.0).ex(), 0.0.ex()], [0.0.ex(), 1.0.ex()]]);
     println!("Metric Tensor:\n{}", sys.strmat(&g));
-    let gamma = christoffel(g.clone(), g.inverse(), x);
+    let gamma = christoffel(g.clone(), g.inv(), x);
     let curvature = ricci_tensor(gamma, x);
     print_curvature(curvature, &sys);
 }

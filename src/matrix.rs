@@ -10,7 +10,7 @@ impl SqMatrix<2> {
         self.0[0][0].clone() * self.0[1][1].clone() - self.0[0][1].clone() * self.0[1][0].clone()
     }
 
-    pub fn inverse(&self) -> Self {
+    pub fn inv(&self) -> Self {
         let det = self.det();
         SqMatrix([
             [
@@ -34,7 +34,7 @@ impl SqMatrix<3> {
         m[0][0].clone() * a - m[0][1].clone() * nb + m[0][2].clone() * c
     }
 
-    pub fn inverse(&self) -> Self {
+    pub fn inv(&self) -> Self {
         let det = self.det();
         let m = &self.0;
         let a = m[1][1].clone() * m[2][2].clone() - m[1][2].clone() * m[2][1].clone();

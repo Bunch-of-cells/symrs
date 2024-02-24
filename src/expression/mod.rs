@@ -175,27 +175,45 @@ impl Expression {
                     .children()
                     .iter()
                     .map(|&id| self.simplify_inner(id))
-                    .filter(|tree| match tree.root().children()[..] {
-                        [id] => tree.node(id).kind != ExprKind::Const(0.0),
-                        _ => true,
-                    })
                 {
-                    match tree.root().children()[..] {
-                        [id] if tree.node(id).kind == ExprKind::Add => {
-                            for &child in tree.node(id).children() {
+                    match tree.sub_roots()[..] {
+                        [Node {
+                            kind: ExprKind::Add,
+                            children,
+                            ..
+                        }] => {
+                            for &child in children {
                                 trees.push(treeify_node(&tree, child));
                             }
                         }
                         _ => trees.push(tree),
                     }
                 }
+                let mut consts = 0.0;
+                trees.retain(|tree| {
+                    if let [Node {
+                        kind: ExprKind::Const(x),
+                        ..
+                    }] = tree.sub_roots()[..] {
+                        consts += x;
+                        false
+                    } else {
+                        true
+                    }
+                });
+                if consts != 0.0 {
+                    trees.push({
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(consts));
+                        new_tree
+                    });
+                }
                 match trees.len() {
-                    0 => {
+                    0 | 1 => trees.pop().unwrap_or_else(|| {
                         let mut new_tree = Tree::new();
                         new_tree.push(ExprKind::Const(0.0));
                         new_tree
-                    }
-                    1 => trees.pop().unwrap(),
+                    }),
                     _ => {
                         let mut new_tree = Tree::new();
                         new_tree.start_node(ExprKind::Add);
@@ -215,36 +233,55 @@ impl Expression {
                     .children()
                     .iter()
                     .map(|&id| self.simplify_inner(id))
-                    .filter(|tree| match tree.root().children()[..] {
-                        [id] => tree.node(id).kind != ExprKind::Const(1.0),
-                        _ => true,
-                    })
                 {
-                    match tree.root().children()[..] {
-                        [id] if tree.node(id).kind == ExprKind::Const(0.0) => {
-                            trees.clear();
-                            trees.push({
-                                let mut tree = Tree::new();
-                                tree.push(ExprKind::Const(0.0));
-                                tree
-                            });
-                            break;
-                        }
-                        [id] if tree.node(id).kind == ExprKind::Mul => {
-                            for &child in tree.node(id).children() {
+                    match tree.sub_roots()[..] {
+                        [Node {
+                            kind: ExprKind::Mul,
+                            children,
+                            ..
+                        }] => {
+                            for &child in children {
                                 trees.push(treeify_node(&tree, child));
                             }
+                        }
+                        [Node {
+                            kind: ExprKind::Const(x),
+                            ..
+                        }] if *x == 0.0 => {
+                            trees.clear();
+                            let mut new_tree = Tree::new();
+                            new_tree.push(ExprKind::Const(0.0));
+                            trees.push(new_tree);
+                            break;
                         }
                         _ => trees.push(tree),
                     }
                 }
-                match trees.len() {
-                    0 => {
-                        let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(0.0));
-                        new_tree
+                let mut consts = 1.0;
+                trees.retain(|tree| {
+                    if let [Node {
+                        kind: ExprKind::Const(x),
+                        ..
+                    }] = tree.sub_roots()[..] {
+                        consts *= x;
+                        false
+                    } else {
+                        true
                     }
-                    1 => trees.pop().unwrap_or_default(),
+                });
+                if consts != 1.0 {
+                    trees.push({
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(consts));
+                        new_tree
+                    });
+                }
+                match trees.len() {
+                    0 | 1 => trees.pop().unwrap_or_else(|| {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(1.0));
+                        new_tree
+                    }),
                     _ => {
                         let mut new_tree = Tree::new();
                         new_tree.start_node(ExprKind::Mul);
@@ -266,17 +303,21 @@ impl Expression {
                 let base_tree = self.simplify_inner(base);
                 let exp_tree = self.simplify_inner(exp);
 
+                let mut b = None;
                 if let [id] = base_tree.root().children()[..] {
                     match base_tree.node(id).kind {
                         ExprKind::Const(c) if c == 0.0 || c == 1.0 => {
                             return base_tree;
                         }
+                        ExprKind::Const(c) => {
+                            b = Some(c);
+                        }
                         _ => (),
                     }
                 }
 
-                if let [id] = exp_tree.root().children()[..] {
-                    match base_tree.node(id).kind {
+                if let [node] = exp_tree.sub_roots()[..] {
+                    match node.kind {
                         ExprKind::Const(c) if c == 0.0 => {
                             let mut new_tree = Tree::new();
                             new_tree.push(ExprKind::Const(1.0));
@@ -284,6 +325,11 @@ impl Expression {
                         }
                         ExprKind::Const(c) if c == 1.0 => {
                             return base_tree;
+                        }
+                        ExprKind::Const(c) if b.is_some() => {
+                            let mut new_tree = Tree::new();
+                            new_tree.push(ExprKind::Const(b.unwrap().powf(c)));
+                            return new_tree;
                         }
                         _ => (),
                     }

@@ -26,6 +26,10 @@ impl Tree {
         &self.nodes[0]
     }
 
+    pub fn sub_roots(&self) -> Vec<&Node> {
+        self.root().children.iter().map(|&i| self.node(i)).collect()
+    }
+
     pub fn node(&self, id: NodeId) -> &Node {
         &self.nodes[id.0]
     }
