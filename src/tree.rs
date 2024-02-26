@@ -30,10 +30,12 @@ impl Tree {
         self.root().children.iter().map(|&i| self.node(i)).collect()
     }
 
+    #[track_caller]
     pub fn node(&self, id: NodeId) -> &Node {
         &self.nodes[id.0]
     }
 
+    #[track_caller]
     pub fn node_mut(&mut self, id: NodeId) -> &mut Node {
         &mut self.nodes[id.0]
     }

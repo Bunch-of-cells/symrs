@@ -88,4 +88,9 @@ impl System {
         }
         f
     }
+
+    pub fn eval<const N: usize, T: Expressable>(&self, exp: T, x: [f64; N]) -> f64 {
+        assert!(self.variables.len() == N);
+        exp.into().eval(&x)
+    }
 }

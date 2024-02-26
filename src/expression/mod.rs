@@ -153,7 +153,7 @@ impl Expression {
         }
     }
 
-    pub fn simplify_inner(&self, id: NodeId) -> Tree {
+    fn simplify_inner(&self, id: NodeId) -> Tree {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
                 let mut new_tree = Tree::new();
@@ -194,7 +194,8 @@ impl Expression {
                     if let [Node {
                         kind: ExprKind::Const(x),
                         ..
-                    }] = tree.sub_roots()[..] {
+                    }] = tree.sub_roots()[..]
+                    {
                         consts += x;
                         false
                     } else {
@@ -262,7 +263,8 @@ impl Expression {
                     if let [Node {
                         kind: ExprKind::Const(x),
                         ..
-                    }] = tree.sub_roots()[..] {
+                    }] = tree.sub_roots()[..]
+                    {
                         consts *= x;
                         false
                     } else {
@@ -276,22 +278,66 @@ impl Expression {
                         new_tree
                     });
                 }
+
                 match trees.len() {
-                    0 | 1 => trees.pop().unwrap_or_else(|| {
-                        let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(1.0));
-                        new_tree
-                    }),
-                    _ => {
-                        let mut new_tree = Tree::new();
-                        new_tree.start_node(ExprKind::Mul);
-                        for tree in trees {
-                            new_tree.push_tree(tree);
-                        }
-                        new_tree.finish_node();
-                        new_tree
+                    0 | 1 => {
+                        return trees.pop().unwrap_or_else(|| {
+                            let mut new_tree = Tree::new();
+                            new_tree.push(ExprKind::Const(1.0));
+                            new_tree
+                        })
+                    }
+                    _ => (),
+                }
+
+                let mut adds = Vec::new();
+                let mut others = Vec::new();
+                for tree in trees {
+                    if tree.sub_roots()[0].kind == ExprKind::Add {
+                        let terms = tree.sub_roots()[0]
+                            .children()
+                            .iter()
+                            .map(|&id| treeify_node(&tree, id))
+                            .collect::<Vec<_>>();
+                        adds.push(terms);
+                    } else {
+                        others.push(tree);
                     }
                 }
+
+                fn recurse_open<'a>(
+                    arr: &'a [Vec<Tree>],
+                    idx: usize,
+                    curr: &mut Vec<&'a Tree>,
+                    trees: &mut Vec<Vec<Tree>>,
+                ) {
+                    if idx >= arr.len() {
+                        return trees.push(curr.iter().cloned().cloned().collect());
+                    }
+                    for i in &arr[idx] {
+                        curr.push(i);
+                        recurse_open(arr, idx + 1, curr, trees);
+                        curr.pop();
+                    }
+                }
+
+                let mut terms = Vec::new();
+                recurse_open(&adds, 0, &mut Vec::new(), &mut terms);
+
+                let mut new_tree = Tree::new();
+                new_tree.start_node(ExprKind::Add);
+                for trees in terms {
+                    new_tree.start_node(ExprKind::Mul);
+                    for tree in trees {
+                        new_tree.push_tree(tree);
+                    }
+                    for tree in &others {
+                        new_tree.push_tree(tree.clone());
+                    }
+                    new_tree.finish_node();
+                }
+                new_tree.finish_node();
+                new_tree
             }
             ExprKind::Pow => {
                 let mut iter = self.tree.node(id).children().iter();
@@ -300,8 +346,8 @@ impl Expression {
                 let exp = *iter.next().unwrap();
                 assert!(iter.next().is_none());
 
-                let base_tree = self.simplify_inner(base);
-                let exp_tree = self.simplify_inner(exp);
+                let mut base_tree = self.simplify_inner(base);
+                let mut exp_tree = self.simplify_inner(exp);
 
                 let mut b = None;
                 if let [id] = base_tree.root().children()[..] {
@@ -311,6 +357,19 @@ impl Expression {
                         }
                         ExprKind::Const(c) => {
                             b = Some(c);
+                        }
+                        ExprKind::Pow => {
+                            let mut iter = base_tree.node(id).children().iter();
+                            let base = *iter.next().unwrap();
+                            let exp = *iter.next().unwrap();
+                            let new_exp = treeify_node(&base_tree, exp);
+                            base_tree = treeify_node(&base_tree, base);
+                            let mut new_exp_tree = Tree::new();
+                            new_exp_tree.start_node(ExprKind::Mul);
+                            new_exp_tree.push_tree(exp_tree);
+                            new_exp_tree.push_tree(new_exp);
+                            new_exp_tree.finish_node();
+                            exp_tree = Expression { tree: new_exp_tree }.simplify().tree;
                         }
                         _ => (),
                     }
@@ -343,6 +402,49 @@ impl Expression {
                 new_tree
             }
         }
+    }
+
+    fn eval_inner(&self, id: NodeId, x: &[f64]) -> f64 {
+        match self.tree.node(id).kind {
+            ExprKind::ROOT => self
+                .tree
+                .node(id)
+                .children()
+                .iter()
+                .map(|&id| self.eval_inner(id, x))
+                .sum(),
+            ExprKind::Var(v) => x[v.id],
+            ExprKind::Const(c) => c,
+            ExprKind::Add => self
+                .tree
+                .node(id)
+                .children()
+                .iter()
+                .map(|&id| self.eval_inner(id, x))
+                .sum(),
+            ExprKind::Mul => self
+                .tree
+                .node(id)
+                .children()
+                .iter()
+                .map(|&id| self.eval_inner(id, x))
+                .product(),
+            ExprKind::Pow => {
+                let mut iter = self.tree.node(id).children().iter();
+
+                let base = *iter.next().unwrap();
+                let exp = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+
+                let base = self.eval_inner(base, x);
+                let exp = self.eval_inner(exp, x);
+                base.powf(exp)
+            }
+        }
+    }
+
+    pub(crate) fn eval(&self, x: &[f64]) -> f64 {
+        self.eval_inner(NodeId::ROOT, x)
     }
 
     pub fn pow<T: Expressable>(self, rhs: T) -> Expression {
@@ -459,6 +561,7 @@ impl Neg for Expression {
     }
 }
 
+#[track_caller]
 fn treeify_node(tree: &Tree, id: NodeId) -> Tree {
     match tree.node(id).kind {
         ExprKind::ROOT => {
