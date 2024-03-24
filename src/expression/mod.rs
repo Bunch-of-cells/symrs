@@ -475,10 +475,10 @@ pub trait Expressable: Into<Expression> + Clone {
 
 impl<T> Expressable for T where T: Into<Expression> + Clone {}
 
-impl From<f64> for Expression {
-    fn from(value: f64) -> Self {
+impl<T: Into<f64>> From<T> for Expression {
+    fn from(value: T) -> Self {
         let mut tree = Tree::new();
-        tree.push(ExprKind::Const(value));
+        tree.push(ExprKind::Const(value.into()));
         Expression { tree }
     }
 }
@@ -558,6 +558,12 @@ impl Neg for Expression {
         tree.push_tree(self.tree);
         tree.finish_node();
         Expression { tree }
+    }
+}
+
+impl PartialEq for Expression {
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }
 

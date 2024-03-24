@@ -93,4 +93,19 @@ impl System {
         assert!(self.variables.len() == N);
         exp.into().eval(&x)
     }
+
+    pub fn evalmat<const N: usize, const M: usize>(
+        &self,
+        mut mat: SqMatrix<M>,
+        x: [f64; N],
+    ) -> SqMatrix<M> {
+        assert!(self.variables.len() == N);
+        for i in mat.0.iter_mut() {
+            for j in i.iter_mut() {
+                let new = j.eval(&x);
+                *j = new.ex();
+            }
+        }
+        mat
+    }
 }
