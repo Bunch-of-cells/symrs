@@ -19,7 +19,7 @@ pub struct Expressand {
 }
 
 impl Expressand {
-    fn d_inner(&self, id: NodeId, x: Var) -> Option<Tree> {
+    fn diff_rec(&self, id: NodeId, x: Var) -> Tree {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
                 let mut trees = self
@@ -27,17 +27,21 @@ impl Expressand {
                     .node(id)
                     .children()
                     .iter()
-                    .filter_map(|&id| self.d_inner(id, x))
+                    .map(|&id| self.diff_rec(id, x))
                     .collect::<Vec<_>>();
 
                 match trees[..] {
-                    [_] | [] => trees.pop(),
+                    [_] | [] => trees.pop().unwrap_or_else(|| {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(0.0));
+                        new_tree
+                    }),
                     _ => {
                         let mut tree = Tree::new();
                         for tre in trees {
                             tree.push_tree(tre);
                         }
-                        Some(tree)
+                        tree
                     }
                 }
             }
@@ -47,11 +51,15 @@ impl Expressand {
                     .node(id)
                     .children()
                     .iter()
-                    .filter_map(|&id| self.d_inner(id, x))
+                    .map(|&id| self.diff_rec(id, x))
                     .collect::<Vec<_>>();
 
                 match trees[..] {
-                    [_] | [] => trees.pop(),
+                    [_] | [] => trees.pop().unwrap_or_else(|| {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(0.0));
+                        new_tree
+                    }),
                     _ => {
                         let mut tree = Tree::new();
                         tree.start_node(ExprKind::Add);
@@ -59,7 +67,7 @@ impl Expressand {
                             tree.push_tree(tre);
                         }
                         tree.finish_node();
-                        Some(tree)
+                        tree
                     }
                 }
             }
@@ -68,7 +76,7 @@ impl Expressand {
                 let mut trees = children
                     .iter()
                     .enumerate()
-                    .filter_map(|(i, &id)| self.d_inner(id, x).map(|d| (i, d)))
+                    .map(|(i, &id)| (i, self.diff_rec(id, x)))
                     .map(|(i, d)| {
                         let mut new_tree = Tree::new();
                         new_tree.start_node(ExprKind::Mul);
@@ -85,7 +93,11 @@ impl Expressand {
                     .collect::<Vec<_>>();
 
                 match trees[..] {
-                    [_] | [] => trees.pop(),
+                    [_] | [] => trees.pop().unwrap_or_else(|| {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(0.0));
+                        new_tree
+                    }),
                     _ => {
                         let mut tree = Tree::new();
                         tree.start_node(ExprKind::Add);
@@ -93,71 +105,83 @@ impl Expressand {
                             tree.push_tree(tre);
                         }
                         tree.finish_node();
-                        Some(tree)
+                        tree
                     }
                 }
+            }
+            ExprKind::Ln => {
+                let mut iter = self.tree.node(id).children().iter();
+                let arg = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+
+                let arg_tree = treeify_node(&self.tree, arg);
+
+                let d_arg = self.diff_rec(arg, x);
+
+                let mut new_tree = Tree::new();
+                new_tree.start_node(ExprKind::Mul);
+                new_tree.push_tree(d_arg);
+
+                new_tree.start_node(ExprKind::Exp);
+
+                new_tree.start_node(ExprKind::Mul);
+                new_tree.start_node(ExprKind::Ln);
+                new_tree.push_tree(arg_tree);
+                new_tree.finish_node();
+                new_tree.push(ExprKind::Const(-1.0));
+                new_tree.finish_node();
+
+                new_tree.finish_node();
+
+                new_tree.finish_node();
+                new_tree
             }
             ExprKind::Var(v) if v.id == x.id => {
                 let mut new_tree = Tree::new();
                 new_tree.push(ExprKind::Const(1.0));
-                Some(new_tree)
+                new_tree
             }
             ExprKind::Var(_) | ExprKind::Const(_) => {
                 let mut new_tree = Tree::new();
                 new_tree.push(ExprKind::Const(0.0));
-                Some(new_tree)
+                new_tree
             }
-            ExprKind::Pow => {
+            ExprKind::Exp => {
                 let mut iter = self.tree.node(id).children().iter();
-                let base = *iter.next().unwrap();
                 let exp = *iter.next().unwrap();
                 assert!(iter.next().is_none());
 
-                let base_tree = treeify_node(&self.tree, base);
-                let exp_tree = treeify_node(&self.tree, exp);
-
-                let d_exp = self.d_inner(exp, x);
-                match d_exp {
-                    None => (),
-                    Some(d_exp) => {
-                        let d_exp = Expressand { tree: d_exp }.simplify_inner(NodeId::ROOT);
-                        if d_exp.node(*d_exp.root().children().first().unwrap()).kind
-                            != ExprKind::Const(0.0)
-                        {
-                            panic!("NOT IMPLEMENTING LOG")
-                        }
-                    }
-                }
-                let d_base = self.d_inner(base, x)?;
+                let node = treeify_node(&self.tree, id);
+                let d_exp = self.diff_rec(exp, x);
 
                 let mut new_tree = Tree::new();
                 new_tree.start_node(ExprKind::Mul);
-
-                new_tree.start_node(ExprKind::Pow);
-                new_tree.push_tree(base_tree);
-                new_tree.start_node(ExprKind::Add);
-                new_tree.push_tree(exp_tree.clone());
-                new_tree.push(ExprKind::Const(-1.0));
+                new_tree.push_tree(node);
+                new_tree.push_tree(d_exp);
                 new_tree.finish_node();
-                new_tree.finish_node();
-
-                new_tree.push_tree(exp_tree);
-                new_tree.push_tree(d_base);
-
-                new_tree.finish_node();
-                Some(new_tree)
+                new_tree
             }
         }
     }
 
-    fn simplify_inner(&self, id: NodeId) -> Tree {
+    fn simplify_rec(&self, id: NodeId) -> Tree {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
                 let mut new_tree = Tree::new();
                 for &child in self.tree.node(id).children() {
-                    new_tree.push_tree(self.simplify_inner(child));
+                    new_tree.push_tree(self.simplify_rec(child));
                 }
                 new_tree
+            }
+            ExprKind::Ln => {
+                let mut iter = self.tree.node(id).children().iter();
+                let mut tree = Tree::new();
+                let arg = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+                tree.start_node(ExprKind::Ln);
+                tree.push_tree(self.simplify_rec(arg));
+                tree.finish_node();
+                tree
             }
             x @ (ExprKind::Var(_) | ExprKind::Const(_)) => {
                 let mut new_tree = Tree::new();
@@ -171,7 +195,7 @@ impl Expressand {
                     .node(id)
                     .children()
                     .iter()
-                    .map(|&id| self.simplify_inner(id))
+                    .map(|&id| self.simplify_rec(id))
                 {
                     match tree.sub_roots()[..] {
                         [Node {
@@ -230,7 +254,7 @@ impl Expressand {
                     .node(id)
                     .children()
                     .iter()
-                    .map(|&id| self.simplify_inner(id))
+                    .map(|&id| self.simplify_rec(id))
                 {
                     match tree.sub_roots()[..] {
                         [Node {
@@ -336,42 +360,12 @@ impl Expressand {
                 new_tree.finish_node();
                 new_tree
             }
-            ExprKind::Pow => {
+            ExprKind::Exp => {
                 let mut iter = self.tree.node(id).children().iter();
-
-                let base = *iter.next().unwrap();
                 let exp = *iter.next().unwrap();
                 assert!(iter.next().is_none());
 
-                let mut base_tree = self.simplify_inner(base);
-                let mut exp_tree = self.simplify_inner(exp);
-
-                let mut b = None;
-                if let [id] = base_tree.root().children()[..] {
-                    match base_tree.node(id).kind {
-                        ExprKind::Const(c) if c == 0.0 || c == 1.0 => {
-                            return base_tree;
-                        }
-                        ExprKind::Const(c) => {
-                            b = Some(c);
-                        }
-                        ExprKind::Pow => {
-                            let mut iter = base_tree.node(id).children().iter();
-                            let base = *iter.next().unwrap();
-                            let exp = *iter.next().unwrap();
-                            let new_exp = treeify_node(&base_tree, exp);
-                            base_tree = treeify_node(&base_tree, base);
-                            let mut new_exp_tree = Tree::new();
-                            new_exp_tree.start_node(ExprKind::Mul);
-                            new_exp_tree.push_tree(exp_tree);
-                            new_exp_tree.push_tree(new_exp);
-                            new_exp_tree.finish_node();
-                            exp_tree =
-                                Expressand { tree: new_exp_tree }.simplify_inner(NodeId::ROOT);
-                        }
-                        _ => (),
-                    }
-                }
+                let exp_tree = self.simplify_rec(exp);
 
                 if let [node] = exp_tree.sub_roots()[..] {
                     match node.kind {
@@ -380,21 +374,20 @@ impl Expressand {
                             new_tree.push(ExprKind::Const(1.0));
                             return new_tree;
                         }
-                        ExprKind::Const(c) if c == 1.0 => {
-                            return base_tree;
-                        }
-                        ExprKind::Const(c) if b.is_some() => {
-                            let mut new_tree = Tree::new();
-                            new_tree.push(ExprKind::Const(b.unwrap().powf(c)));
-                            return new_tree;
+                        ExprKind::Ln => {
+                            let mut iter = self.tree.node(id).children().iter();
+                            let mut tree = Tree::new();
+                            let arg = *iter.next().unwrap();
+                            assert!(iter.next().is_none());
+                            tree.push_tree(self.simplify_rec(arg));
+                            return tree;
                         }
                         _ => (),
                     }
                 }
 
                 let mut new_tree = Tree::new();
-                new_tree.start_node(ExprKind::Pow);
-                new_tree.push_tree(base_tree);
+                new_tree.start_node(ExprKind::Exp);
                 new_tree.push_tree(exp_tree);
                 new_tree.finish_node();
                 new_tree
@@ -402,15 +395,24 @@ impl Expressand {
         }
     }
 
-    fn eval_inner(&self, id: NodeId, x: &[f64]) -> f64 {
+    fn eval_rec(&self, id: NodeId, x: &[f64]) -> f64 {
         match self.tree.node(id).kind {
             ExprKind::ROOT => self
                 .tree
                 .node(id)
                 .children()
                 .iter()
-                .map(|&id| self.eval_inner(id, x))
+                .map(|&id| self.eval_rec(id, x))
                 .sum(),
+            ExprKind::Ln => {
+                let mut iter = self.tree.node(id).children().iter();
+
+                let arg = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+
+                let arg = self.eval_rec(arg, x);
+                arg.ln()
+            }
             ExprKind::Var(v) => x[v.id],
             ExprKind::Const(c) => c,
             ExprKind::Add => self
@@ -418,31 +420,27 @@ impl Expressand {
                 .node(id)
                 .children()
                 .iter()
-                .map(|&id| self.eval_inner(id, x))
+                .map(|&id| self.eval_rec(id, x))
                 .sum(),
             ExprKind::Mul => self
                 .tree
                 .node(id)
                 .children()
                 .iter()
-                .map(|&id| self.eval_inner(id, x))
+                .map(|&id| self.eval_rec(id, x))
                 .product(),
-            ExprKind::Pow => {
+            ExprKind::Exp => {
                 let mut iter = self.tree.node(id).children().iter();
-
-                let base = *iter.next().unwrap();
                 let exp = *iter.next().unwrap();
                 assert!(iter.next().is_none());
-
-                let base = self.eval_inner(base, x);
-                let exp = self.eval_inner(exp, x);
-                base.powf(exp)
+                let exp = self.eval_rec(exp, x);
+                exp.exp()
             }
         }
     }
 
     pub(crate) fn eval(&self, x: &[f64]) -> f64 {
-        self.eval_inner(NodeId::ROOT, x)
+        self.eval_rec(NodeId::ROOT, x)
     }
 }
 
@@ -461,7 +459,7 @@ fn treeify_node(tree: &Tree, id: NodeId) -> Tree {
             new_tree.push(x);
             new_tree
         }
-        kind @ (ExprKind::Add | ExprKind::Mul | ExprKind::Pow) => {
+        kind @ (ExprKind::Add | ExprKind::Mul | ExprKind::Exp | ExprKind::Ln) => {
             let mut new_tree = Tree::new();
             new_tree.start_node(kind);
             for tre in tree
@@ -485,7 +483,8 @@ pub enum ExprKind {
     Const(f64),
     Add,
     Mul,
-    Pow,
+    Exp,
+    Ln,
 }
 
 #[derive(Debug, Clone)]
@@ -497,36 +496,82 @@ where
 {
     pub fn diff(self, x: Var) -> Expression {
         Expressable(Expressand {
-            tree: <Self as Into<Expression>>::into(self)
-                .0
-                .d_inner(NodeId::ROOT, x)
-                .unwrap_or_default(),
+            tree: e!(self).0.diff_rec(NodeId::ROOT, x),
         })
     }
 
     pub fn simplify(self) -> Expression {
         Expressable(Expressand {
-            tree: <Self as Into<Expression>>::into(self)
-                .0
-                .simplify_inner(NodeId::ROOT),
+            tree: e!(self).0.simplify_rec(NodeId::ROOT),
         })
     }
 
-    pub fn pow<U: Into<Expression>>(self, rhs: U) -> Expression {
+    pub fn ln(self) -> Expression {
         let mut tree = Tree::new();
-        tree.start_node(ExprKind::Pow);
-        tree.push_tree(<Self as Into<Expression>>::into(self).0.tree);
-        tree.push_tree(<U as Into<Expression>>::into(rhs).0.tree);
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub fn exp(self) -> Expression {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Exp);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub fn pow<U>(self, exp: U) -> Expression
+    where
+        Expression: From<U>,
+    {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Exp);
+
+        tree.start_node(ExprKind::Mul);
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+        tree.push_tree(e!(exp).0.tree);
+        tree.finish_node();
+
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub fn log<U>(self, base: U) -> Expression
+    where
+        Expression: From<U>,
+    {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Mul);
+
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+
+        tree.start_node(ExprKind::Exp);
+        tree.start_node(ExprKind::Mul);
+        tree.start_node(ExprKind::Ln);
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(base).0.tree);
+        tree.finish_node();
+        tree.finish_node();
+        tree.push(ExprKind::Const(-1.0));
+        tree.finish_node();
+        tree.finish_node();
+
         tree.finish_node();
         Expressable(Expressand { tree })
     }
 
     pub(crate) fn tree(self) -> Tree {
-        <Self as Into<Expression>>::into(self.clone()).0.tree
+        e!(self.clone()).0.tree
     }
 
     pub(crate) fn ex(self) -> Expressand {
-        <Self as Into<Expression>>::into(self).0
+        e!(self).0
     }
 }
 
@@ -555,8 +600,8 @@ where
     fn add(self, rhs: Expressable<U>) -> Self::Output {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Add);
-        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
-        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.push_tree(e!(self).0.tree);
+        tree.push_tree(e!(rhs).0.tree);
         tree.finish_node();
         Expressable(Expressand { tree })
     }
@@ -571,8 +616,8 @@ where
     fn mul(self, rhs: Expressable<U>) -> Self::Output {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Mul);
-        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
-        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.push_tree(e!(self).0.tree);
+        tree.push_tree(e!(rhs).0.tree);
         tree.finish_node();
         Expressable(Expressand { tree })
     }
@@ -587,10 +632,10 @@ where
     fn sub(self, rhs: Expressable<U>) -> Self::Output {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Add);
-        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.push_tree(e!(self).0.tree);
         tree.start_node(ExprKind::Mul);
         tree.push(ExprKind::Const(-1.0));
-        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.push_tree(e!(rhs).0.tree);
         tree.finish_node();
         tree.finish_node();
         Expressable(Expressand { tree })
@@ -606,10 +651,16 @@ where
     fn div(self, rhs: Expressable<U>) -> Self::Output {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Mul);
-        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
-        tree.start_node(ExprKind::Pow);
-        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.push_tree(e!(self).0.tree);
+        tree.start_node(ExprKind::Exp);
+
+        tree.start_node(ExprKind::Mul);
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(rhs).0.tree);
+        tree.finish_node();
         tree.push(ExprKind::Const(-1.0));
+        tree.finish_node();
+
         tree.finish_node();
         tree.finish_node();
         Expressable(Expressand { tree })
@@ -625,7 +676,7 @@ where
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Mul);
         tree.push(ExprKind::Const(-1.0));
-        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.push_tree(e!(self).0.tree);
         tree.finish_node();
         Expressable(Expressand { tree })
     }

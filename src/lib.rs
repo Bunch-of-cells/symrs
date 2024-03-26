@@ -60,14 +60,19 @@ impl System {
                     }
                     *f += " ";
                 }
-                ExprKind::Pow => {
-                    *f += " ";
+                ExprKind::Exp => {
+                    *f += " e^";
                     let mut iter = tree.node(id).children().iter();
-                    write_children(vars, tree, *iter.next().unwrap(), f);
-                    *f += "^";
                     write_children(vars, tree, *iter.next().unwrap(), f);
                     assert!(iter.next().is_none());
                     *f += " ";
+                }
+                ExprKind::Ln => {
+                    *f += "ln(";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    assert!(iter.next().is_none());
+                    *f += ")";
                 }
                 ExprKind::ROOT => {
                     for &child in tree.node(id).children() {

@@ -5,17 +5,15 @@ mod curvature;
 
 fn main() {
     let mut sys = System::default();
-    let [r] = sys.symbols("r").unwrap();
-    let a = e!(-4) / e!(r) * e!(std::f64::consts::E).pow(-e!(r));
-    let g = SqMatrix([
-        [a.clone(), e!(0), e!(0), e!(0)],
-        [e!(0), -a, e!(0), e!(0)],
-        [e!(0), e!(0), e!(r).pow(2), e!(0)],
-        [e!(0), e!(0), e!(0), e!(r).pow(2)],
-    ]);
+    let [x] = sys.symbols("x").unwrap();
 
-    let x = [1.0];
+    let y = e!(x).log(2.0).simplify();
+    let dy = y.clone().diff(x).simplify();
 
-    println!("{}", sys.strmat(sys.evalmat(g.clone(), x)));
-    println!("{}", sys.strmat(sys.evalmat(g.inv(), x)));
+    println!("{}", sys.str(y.clone()));
+    println!("{}", sys.str(dy.clone()));
+
+    let x = [2.0];
+    println!("{}", sys.eval(y, x));
+    println!("{}", sys.eval(dy, x));
 }
