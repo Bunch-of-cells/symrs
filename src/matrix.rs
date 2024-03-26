@@ -10,7 +10,7 @@ pub struct SqMatrix<const N: usize>(pub [[Expression; N]; N]);
 
 impl<const N: usize> SqMatrix<N> {
     pub fn tr(&self) -> Expression {
-        let mut sum = 0.0.ex();
+        let mut sum = 0.into();
         for i in 0..N {
             sum = sum + self.0[i][i].clone();
         }
@@ -18,33 +18,35 @@ impl<const N: usize> SqMatrix<N> {
     }
 
     pub fn identity() -> Self {
-        let mut m: [[Expression; N]; N] = array::from_fn(|_| array::from_fn(|_| 0.0.ex()));
+        let mut m: [[Expression; N]; N] = array::from_fn(|_| array::from_fn(|_| 0.into()));
         for (i, v) in m.iter_mut().enumerate() {
-            v[i] = 1.0.ex();
+            v[i] = 1.into();
         }
         SqMatrix(m)
     }
 
     pub fn zeroes() -> Self {
-        SqMatrix(array::from_fn(|_| array::from_fn(|_| 0.0.ex())))
+        SqMatrix(array::from_fn(|_| array::from_fn(|_| 0.into())))
     }
 
-    pub fn diff(mut self, x: Var) -> Self {
+    pub fn diff(&self, x: Var) -> Self {
+        let mut new = Self::zeroes();
         for i in 0..N {
             for j in 0..N {
-                self.0[i][j] = self.0[i][j].diff(x);
+                new.0[i][j] = self.0[i][j].clone().diff(x);
             }
         }
-        self
+        new
     }
 
-    pub fn simplify(mut self) -> Self {
+    pub fn simplify(&self) -> Self {
+        let mut new = Self::zeroes();
         for i in 0..N {
             for j in 0..N {
-                self.0[i][j] = self.0[i][j].simplify();
+                new.0[i][j] = self.0[i][j].clone().simplify();
             }
         }
-        self
+        new
     }
 
     pub fn pow(&self, n: usize) -> Self {
@@ -82,16 +84,17 @@ impl<const N: usize> SqMatrix<N> {
 
     fn determinant(&self, n: usize) -> Expression {
         match n {
-            0 => return 0.ex(),
+            0 => return 0.into(),
             1 => return self.0[0][0].clone(),
             _ => (),
         }
-        let mut det = 0.ex();
+        let mut det = 0.into();
         let mut temp = Self::zeroes();
-        let mut sgn = 1.0;
+        let mut sgn = 1;
         for i in 0..n {
             self.get_cofactor(&mut temp, 0, i, n);
-            det = det + sgn.ex() * self[0][i].clone() * temp.determinant(n - 1);
+            det = det
+                + <_ as Into<Expression>>::into(sgn) * self[0][i].clone() * temp.determinant(n - 1);
             sgn = -sgn;
         }
         det
@@ -111,8 +114,8 @@ impl<const N: usize> SqMatrix<N> {
         for i in 0..N {
             for j in 0..N {
                 self.get_cofactor(&mut temp, i, j, N);
-                let sgn = -2.0 * ((i + j) % 2) as f64 + 1.0;
-                adj[j][i] = sgn.ex() * temp.determinant(N - 1);
+                let sgn = -2 * ((i + j) % 2) as i32 + 1;
+                adj[j][i] = <_ as Into<Expression>>::into(sgn) * temp.determinant(N - 1);
             }
         }
         adj
@@ -130,10 +133,10 @@ impl<const N: usize> SqMatrix<N> {
 impl<const N: usize> Mul for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn mul(self, rhs: Self) -> Self::Output {
-        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
+        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
         for (i, c) in c.iter_mut().enumerate() {
             for (j, c) in c.iter_mut().enumerate() {
-                let mut sum = 0.0.ex();
+                let mut sum = 0.into();
                 for k in 0..N {
                     sum = sum + self.0[i][k].clone() * rhs.0[k][j].clone();
                 }
@@ -147,7 +150,7 @@ impl<const N: usize> Mul for SqMatrix<N> {
 impl<const N: usize> Add for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn add(self, rhs: Self) -> Self::Output {
-        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
+        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
         for (i, c) in c.iter_mut().enumerate() {
             for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() + rhs.0[i][j].clone();
@@ -160,7 +163,7 @@ impl<const N: usize> Add for SqMatrix<N> {
 impl<const N: usize> Sub for SqMatrix<N> {
     type Output = SqMatrix<N>;
     fn sub(self, rhs: Self) -> Self::Output {
-        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
+        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
         for (i, c) in c.iter_mut().enumerate() {
             for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() - rhs.0[i][j].clone();
@@ -170,10 +173,13 @@ impl<const N: usize> Sub for SqMatrix<N> {
     }
 }
 
-impl<const N: usize, T: Expressable> Mul<T> for SqMatrix<N> {
+impl<const N: usize, T: Clone> Mul<Expressable<T>> for SqMatrix<N>
+where
+    Expression: From<Expressable<T>>,
+{
     type Output = SqMatrix<N>;
-    fn mul(self, rhs: T) -> Self::Output {
-        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
+    fn mul(self, rhs: Expressable<T>) -> Self::Output {
+        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
         for (i, c) in c.iter_mut().enumerate() {
             for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() * rhs.clone();
@@ -183,10 +189,13 @@ impl<const N: usize, T: Expressable> Mul<T> for SqMatrix<N> {
     }
 }
 
-impl<const N: usize, T: Expressable> Div<T> for SqMatrix<N> {
+impl<const N: usize, T: Clone> Div<Expressable<T>> for SqMatrix<N>
+where
+    Expression: From<Expressable<T>>,
+{
     type Output = SqMatrix<N>;
-    fn div(self, rhs: T) -> Self::Output {
-        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.0.ex()));
+    fn div(self, rhs: Expressable<T>) -> Self::Output {
+        let mut c = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
         for (i, c) in c.iter_mut().enumerate() {
             for (j, c) in c.iter_mut().enumerate() {
                 *c = self.0[i][j].clone() / rhs.clone();

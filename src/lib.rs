@@ -30,8 +30,11 @@ impl System {
         Ok(vars)
     }
 
-    pub fn str<T: Expressable>(&self, exp: &T) -> String {
-        let exp: Expression = exp.clone().into();
+    pub fn str<T: Clone>(&self, exp: Expressable<T>) -> String
+    where
+        Expression: From<Expressable<T>>,
+    {
+        let tree = exp.tree();
         let mut f = String::new();
         fn write_children(vars: &[String], tree: &Tree, id: NodeId, f: &mut String) {
             match tree.node(id).kind() {
@@ -73,15 +76,15 @@ impl System {
                 }
             }
         }
-        write_children(&self.variables, &exp.tree, NodeId::ROOT, &mut f);
+        write_children(&self.variables, &tree, NodeId::ROOT, &mut f);
         f
     }
 
-    pub fn strmat<const N: usize>(&self, mat: &SqMatrix<N>) -> String {
+    pub fn strmat<const N: usize>(&self, mat: SqMatrix<N>) -> String {
         let mut f = String::new();
-        for x in mat.0.iter() {
+        for x in mat.0.into_iter() {
             f += "[";
-            for x in x.iter() {
+            for x in x.into_iter() {
                 f.push_str(&format!("{:5}", self.str(x)));
             }
             f += "]\n";
@@ -89,9 +92,12 @@ impl System {
         f
     }
 
-    pub fn eval<const N: usize, T: Expressable>(&self, exp: T, x: [f64; N]) -> f64 {
+    pub fn eval<const N: usize, T: Clone>(&self, exp: Expressable<T>, x: [f64; N]) -> f64
+    where
+        Expression: From<Expressable<T>>,
+    {
         assert!(self.variables.len() == N);
-        exp.into().eval(&x)
+        exp.ex().eval(&x)
     }
 
     pub fn evalmat<const N: usize, const M: usize>(
@@ -102,8 +108,7 @@ impl System {
         assert!(self.variables.len() == N);
         for i in mat.0.iter_mut() {
             for j in i.iter_mut() {
-                let new = j.eval(&x);
-                *j = new.ex();
+                *j = j.clone().ex().eval(&x).into();
             }
         }
         mat

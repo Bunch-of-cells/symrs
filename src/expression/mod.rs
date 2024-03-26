@@ -4,24 +4,21 @@ pub use var::*;
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+#[macro_export]
+macro_rules! e {
+    ($ex:expr) => {
+        $crate::expression::Expression::from($ex)
+    };
+}
+
+pub use e;
+
 #[derive(Debug, Clone)]
-pub struct Expression {
+pub struct Expressand {
     pub(crate) tree: Tree,
 }
 
-impl Expression {
-    pub fn diff(&self, x: Var) -> Expression {
-        Expression {
-            tree: self.d_inner(NodeId::ROOT, x).unwrap_or_default(),
-        }
-    }
-
-    pub fn simplify(&self) -> Expression {
-        Expression {
-            tree: self.simplify_inner(NodeId::ROOT),
-        }
-    }
-
+impl Expressand {
     fn d_inner(&self, id: NodeId, x: Var) -> Option<Tree> {
         match self.tree.node(id).kind {
             ExprKind::ROOT => {
@@ -123,7 +120,7 @@ impl Expression {
                 match d_exp {
                     None => (),
                     Some(d_exp) => {
-                        let d_exp = Expression { tree: d_exp }.simplify().tree;
+                        let d_exp = Expressand { tree: d_exp }.simplify_inner(NodeId::ROOT);
                         if d_exp.node(*d_exp.root().children().first().unwrap()).kind
                             != ExprKind::Const(0.0)
                         {
@@ -369,7 +366,8 @@ impl Expression {
                             new_exp_tree.push_tree(exp_tree);
                             new_exp_tree.push_tree(new_exp);
                             new_exp_tree.finish_node();
-                            exp_tree = Expression { tree: new_exp_tree }.simplify().tree;
+                            exp_tree =
+                                Expressand { tree: new_exp_tree }.simplify_inner(NodeId::ROOT);
                         }
                         _ => (),
                     }
@@ -446,125 +444,6 @@ impl Expression {
     pub(crate) fn eval(&self, x: &[f64]) -> f64 {
         self.eval_inner(NodeId::ROOT, x)
     }
-
-    pub fn pow<T: Expressable>(self, rhs: T) -> Expression {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Pow);
-        tree.push_tree(self.tree);
-        tree.push_tree(rhs.into().tree);
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ExprKind {
-    ROOT,
-    Var(Var),
-    Const(f64),
-    Add,
-    Mul,
-    Pow,
-}
-
-pub trait Expressable: Into<Expression> + Clone {
-    fn ex(self) -> Expression {
-        self.into()
-    }
-}
-
-impl<T> Expressable for T where T: Into<Expression> + Clone {}
-
-impl<T: Into<f64>> From<T> for Expression {
-    fn from(value: T) -> Self {
-        let mut tree = Tree::new();
-        tree.push(ExprKind::Const(value.into()));
-        Expression { tree }
-    }
-}
-
-impl<T> Add<T> for Expression
-where
-    T: Expressable,
-{
-    type Output = Expression;
-    fn add(self, rhs: T) -> Self::Output {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Add);
-        tree.push_tree(self.tree);
-        tree.push_tree(rhs.into().tree);
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-impl<T> Mul<T> for Expression
-where
-    T: Expressable,
-{
-    type Output = Expression;
-    fn mul(self, rhs: T) -> Self::Output {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Mul);
-        tree.push_tree(self.tree);
-        tree.push_tree(rhs.into().tree);
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-impl<T> Sub<T> for Expression
-where
-    T: Expressable,
-{
-    type Output = Expression;
-    fn sub(self, rhs: T) -> Self::Output {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Add);
-        tree.push_tree(self.tree);
-        tree.start_node(ExprKind::Mul);
-        tree.push(ExprKind::Const(-1.0));
-        tree.push_tree(rhs.into().tree);
-        tree.finish_node();
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-impl<T> Div<T> for Expression
-where
-    T: Expressable,
-{
-    type Output = Expression;
-    fn div(self, rhs: T) -> Self::Output {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Mul);
-        tree.push_tree(self.tree);
-        tree.start_node(ExprKind::Pow);
-        tree.push_tree(rhs.into().tree);
-        tree.push(ExprKind::Const(-1.0));
-        tree.finish_node();
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-impl Neg for Expression {
-    type Output = Expression;
-    fn neg(self) -> Self::Output {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Mul);
-        tree.push(ExprKind::Const(-1.0));
-        tree.push_tree(self.tree);
-        tree.finish_node();
-        Expression { tree }
-    }
-}
-
-impl PartialEq for Expression {
-    fn eq(&self, _other: &Self) -> bool {
-        false
-    }
 }
 
 #[track_caller]
@@ -596,5 +475,164 @@ fn treeify_node(tree: &Tree, id: NodeId) -> Tree {
             new_tree.finish_node();
             new_tree
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ExprKind {
+    ROOT,
+    Var(Var),
+    Const(f64),
+    Add,
+    Mul,
+    Pow,
+}
+
+#[derive(Debug, Clone)]
+pub struct Expressable<T: Clone>(T);
+
+impl<T: Clone> Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+{
+    pub fn diff(self, x: Var) -> Expression {
+        Expressable(Expressand {
+            tree: <Self as Into<Expression>>::into(self)
+                .0
+                .d_inner(NodeId::ROOT, x)
+                .unwrap_or_default(),
+        })
+    }
+
+    pub fn simplify(self) -> Expression {
+        Expressable(Expressand {
+            tree: <Self as Into<Expression>>::into(self)
+                .0
+                .simplify_inner(NodeId::ROOT),
+        })
+    }
+
+    pub fn pow<U: Into<Expression>>(self, rhs: U) -> Expression {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Pow);
+        tree.push_tree(<Self as Into<Expression>>::into(self).0.tree);
+        tree.push_tree(<U as Into<Expression>>::into(rhs).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub(crate) fn tree(self) -> Tree {
+        <Self as Into<Expression>>::into(self.clone()).0.tree
+    }
+
+    pub(crate) fn ex(self) -> Expressand {
+        <Self as Into<Expression>>::into(self).0
+    }
+}
+
+pub type Expression = Expressable<Expressand>;
+
+impl From<Expressand> for Expression {
+    fn from(value: Expressand) -> Self {
+        Expressable(value)
+    }
+}
+
+impl<T: Into<f64>> From<T> for Expression {
+    fn from(value: T) -> Self {
+        let mut tree = Tree::new();
+        tree.push(ExprKind::Const(value.into()));
+        Expressable(Expressand { tree })
+    }
+}
+
+impl<T: Clone, U: Clone> Add<Expressable<U>> for Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+    Expression: From<Expressable<U>>,
+{
+    type Output = Expression;
+    fn add(self, rhs: Expressable<U>) -> Self::Output {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Add);
+        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+}
+
+impl<T: Clone, U: Clone> Mul<Expressable<U>> for Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+    Expression: From<Expressable<U>>,
+{
+    type Output = Expression;
+    fn mul(self, rhs: Expressable<U>) -> Self::Output {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Mul);
+        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+}
+
+impl<T: Clone, U: Clone> Sub<Expressable<U>> for Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+    Expression: From<Expressable<U>>,
+{
+    type Output = Expression;
+    fn sub(self, rhs: Expressable<U>) -> Self::Output {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Add);
+        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.start_node(ExprKind::Mul);
+        tree.push(ExprKind::Const(-1.0));
+        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.finish_node();
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+}
+
+impl<T: Clone, U: Clone> Div<Expressable<U>> for Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+    Expression: From<Expressable<U>>,
+{
+    type Output = Expression;
+    fn div(self, rhs: Expressable<U>) -> Self::Output {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Mul);
+        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.start_node(ExprKind::Pow);
+        tree.push_tree(<Expressable<U> as Into<Expression>>::into(rhs).0.tree);
+        tree.push(ExprKind::Const(-1.0));
+        tree.finish_node();
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+}
+
+impl<T: Clone> Neg for Expressable<T>
+where
+    Expression: From<Expressable<T>>,
+{
+    type Output = Expression;
+    fn neg(self) -> Self::Output {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Mul);
+        tree.push(ExprKind::Const(-1.0));
+        tree.push_tree(<Expressable<T> as Into<Expression>>::into(self).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+}
+
+impl PartialEq for Expressand {
+    fn eq(&self, _other: &Self) -> bool {
+        false
     }
 }
