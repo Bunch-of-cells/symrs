@@ -39,7 +39,7 @@ impl System {
         fn write_children(vars: &[String], tree: &Tree, id: NodeId, f: &mut String) {
             match tree.node(id).kind() {
                 ExprKind::Var(x) => *f += &vars[x.id],
-                ExprKind::Const(c) => f.push_str(&c.to_string()),
+                ExprKind::Const(c) => f.push_str(&format!("{c:.3}")),
                 ExprKind::Add => {
                     *f += "(";
                     let mut iter = tree.node(id).children().iter();
@@ -85,7 +85,7 @@ impl System {
         for x in mat.0.into_iter() {
             f += "[";
             for x in x.into_iter() {
-                f.push_str(&format!("{:5}", self.str(x)));
+                f.push_str(&format!("{:^8}", self.str(x)));
             }
             f += "]\n";
         }
