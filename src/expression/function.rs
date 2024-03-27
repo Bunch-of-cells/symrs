@@ -1,4 +1,6 @@
-use crate::{e, ExprKind, Expression, Tree};
+use num_complex::Complex64;
+
+use crate::{e, ExprKind, Expression, Tree, NEGONE};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Function {
@@ -7,7 +9,7 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn eval(&self, args: &[f64]) -> f64 {
+    pub fn eval(&self, args: &[Complex64]) -> Complex64 {
         match self {
             Function::Sin => args[0].sin(),
             Function::Cos => args[0].cos(),
@@ -28,7 +30,7 @@ impl Function {
             Function::Cos => {
                 let mut tree = Tree::new();
                 tree.start_node(ExprKind::Mul);
-                tree.push(ExprKind::Const(-1.0));
+                tree.push(ExprKind::Const(NEGONE));
                 tree.start_node(ExprKind::Func(Function::Cos));
                 for arg in args {
                     tree.push_tree(arg);

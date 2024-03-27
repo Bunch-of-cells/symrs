@@ -1,4 +1,4 @@
-use symrs::{e, Expression, SqMatrix, System, Var};
+use symrs::{e, Expression, SqMatrix, System, Var, ZERO};
 
 pub fn print_curvature<const N: usize>(curvature: RicciCurvature<N>, sys: &System) {
     let mut f = String::new();
@@ -19,11 +19,11 @@ pub fn christoffel<const N: usize>(
     x: [Var; N],
 ) -> Christoffel<N> {
     let mut gamma =
-        std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| 0.into())));
+        std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| ZERO.into())));
     for (m, c) in gamma.iter_mut().enumerate() {
         for (n, c) in c.iter_mut().enumerate() {
             for (r, c) in c.iter_mut().enumerate() {
-                let mut sum = e!(0);
+                let mut sum = e!(0.0);
                 for s in 0..N {
                     sum = sum
                         + g_inv[r][s].clone()
@@ -40,7 +40,7 @@ pub fn christoffel<const N: usize>(
 pub type RiemannCurvature<const N: usize> = [[[[Expression; N]; N]; N]; N];
 pub fn riemann_tensor<const N: usize>(gamma: &Christoffel<N>, x: [Var; N]) -> RiemannCurvature<N> {
     let mut r = std::array::from_fn(|_| {
-        std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| 0.into())))
+        std::array::from_fn(|_| std::array::from_fn(|_| std::array::from_fn(|_| ZERO.into())))
     });
     for (i, c) in r.iter_mut().enumerate() {
         for (j, c) in c.iter_mut().enumerate() {
@@ -62,7 +62,7 @@ pub fn riemann_tensor<const N: usize>(gamma: &Christoffel<N>, x: [Var; N]) -> Ri
 
 pub type RicciCurvature<const N: usize> = [[Expression; N]; N];
 pub fn ricci_tensor<const N: usize>(riemann_tensor: &RiemannCurvature<N>) -> RicciCurvature<N> {
-    let mut r = std::array::from_fn(|_| std::array::from_fn(|_| 0.into()));
+    let mut r = std::array::from_fn(|_| std::array::from_fn(|_| ZERO.into()));
     for (i, c) in r.iter_mut().enumerate() {
         for (j, c) in c.iter_mut().enumerate() {
             #[allow(clippy::needless_range_loop)]
@@ -78,7 +78,7 @@ pub fn scalar_curvature<const N: usize>(
     ricci_tensor: &RicciCurvature<N>,
     g_inv: SqMatrix<N>,
 ) -> Expression {
-    let mut r = 0.into();
+    let mut r = ZERO.into();
     for m in 0..N {
         for n in 0..N {
             r = r + g_inv[m][n].clone() * ricci_tensor[m][n].clone()

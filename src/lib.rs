@@ -5,6 +5,11 @@ pub mod tree;
 use crate::tree::{NodeId, Tree};
 pub use expression::*;
 pub use matrix::*;
+use num_complex::Complex64;
+
+pub const ZERO: Complex64 = Complex64::new(0.0, 0.0);
+pub const NEGONE: Complex64 = Complex64::new(-1.0, 0.0);
+pub const ONE: Complex64 = Complex64::new(1.0, 0.0);
 
 #[derive(Default, Clone, Debug)]
 pub struct System {
@@ -108,18 +113,25 @@ impl System {
         f
     }
 
-    pub fn eval<const N: usize, T: Clone>(&self, exp: Expressable<T>, x: [f64; N]) -> f64
+    pub fn eval<const N: usize, T: Clone>(
+        &self,
+        exp: Expressable<T>,
+        x: [Complex64; N],
+    ) -> Complex64
     where
         Expression: From<Expressable<T>>,
     {
-        assert!(self.variables.len() == N, "Inadequate number of values provided");
+        assert!(
+            self.variables.len() == N,
+            "Inadequate number of values provided"
+        );
         exp.ex().eval(&x)
     }
 
     pub fn evalmat<const N: usize, const M: usize>(
         &self,
         mut mat: SqMatrix<M>,
-        x: [f64; N],
+        x: [Complex64; N],
     ) -> SqMatrix<M> {
         assert!(self.variables.len() == N);
         for i in mat.0.iter_mut() {
