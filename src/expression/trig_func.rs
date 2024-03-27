@@ -1,5 +1,19 @@
 use crate::{c, expression::*, Expression};
 
+pub fn sin<T: Clone>(z: T) -> Expression
+where
+    Expression: From<T>,
+{
+    Expression::func(Function::Sin, vec![e!(z)])
+}
+
+pub fn cos<T: Clone>(z: T) -> Expression
+where
+    Expression: From<T>,
+{
+    Expression::func(Function::Cos, vec![e!(z)])
+}
+
 pub fn tan<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,

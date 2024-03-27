@@ -1,6 +1,6 @@
 use num_complex::Complex64;
 
-use crate::{e, ExprKind, Expression, Tree, NEGONE};
+use crate::{ExprKind, Tree, NEGONE};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Function {
@@ -48,18 +48,4 @@ impl Function {
             Function::Cos => "cos",
         }
     }
-}
-
-pub fn sin<T: Clone>(z: T) -> Expression
-where
-    Expression: From<T>,
-{
-    Expression::func(Function::Sin, vec![e!(z)])
-}
-
-pub fn cos<T: Clone>(z: T) -> Expression
-where
-    Expression: From<T>,
-{
-    Expression::func(Function::Cos, vec![e!(z)])
 }

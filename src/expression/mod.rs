@@ -1,10 +1,10 @@
 pub mod function;
-pub mod more_func;
+pub mod trig_func;
 pub mod var;
 use crate::tree::*;
 use crate::{NEGONE, ONE, ZERO};
 pub use function::*;
-pub use more_func::*;
+pub use trig_func::*;
 use num_complex::Complex64;
 pub use var::*;
 
