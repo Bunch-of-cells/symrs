@@ -14,7 +14,7 @@ pub struct System {
 impl System {
     pub fn symbols<const N: usize>(&mut self, idents: &str) -> Result<[Var; N], String> {
         let idents = idents.split_ascii_whitespace().collect::<Vec<_>>();
-        assert!(idents.len() == N);
+        assert!(idents.len() == N, "Inadequate amount of identifiers");
         let mut vars: [Var; N] = std::array::from_fn(|_| Var { id: 0 });
 
         for (i, &ident) in idents.iter().enumerate() {
@@ -79,6 +79,17 @@ impl System {
                         write_children(vars, tree, child, f);
                     }
                 }
+                ExprKind::Func(func) => {
+                    *f += func.str();
+                    *f += "(";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    for &child in iter {
+                        *f += ",";
+                        write_children(vars, tree, child, f);
+                    }
+                    *f += ")";
+                }
             }
         }
         write_children(&self.variables, &tree, NodeId::ROOT, &mut f);
@@ -101,7 +112,7 @@ impl System {
     where
         Expression: From<Expressable<T>>,
     {
-        assert!(self.variables.len() == N);
+        assert!(self.variables.len() == N, "Inadequate number of values provided");
         exp.ex().eval(&x)
     }
 
