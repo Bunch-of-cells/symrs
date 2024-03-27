@@ -31,7 +31,7 @@ impl Function {
                 let mut tree = Tree::new();
                 tree.start_node(ExprKind::Mul);
                 tree.push(ExprKind::Const(NEGONE));
-                tree.start_node(ExprKind::Func(Function::Cos));
+                tree.start_node(ExprKind::Func(Function::Sin));
                 for arg in args {
                     tree.push_tree(arg);
                 }
@@ -50,16 +50,16 @@ impl Function {
     }
 }
 
-pub fn sin<T>(x: T) -> Expression
+pub fn sin<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    Expression::func(Function::Sin, vec![e!(x)])
+    Expression::func(Function::Sin, vec![e!(z)])
 }
 
-pub fn cos<T>(x: T) -> Expression
+pub fn cos<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    Expression::func(Function::Cos, vec![e!(x)])
+    Expression::func(Function::Cos, vec![e!(z)])
 }

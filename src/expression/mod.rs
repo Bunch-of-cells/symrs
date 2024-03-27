@@ -1,8 +1,10 @@
 pub mod function;
+pub mod more_func;
 pub mod var;
 use crate::tree::*;
 use crate::{NEGONE, ONE, ZERO};
 pub use function::*;
+pub use more_func::*;
 use num_complex::Complex64;
 pub use var::*;
 
@@ -603,7 +605,7 @@ where
         Expressable(Expressand { tree })
     }
 
-    pub fn pow<U>(self, exp: U) -> Expression
+    pub fn pow<U: Clone>(self, exp: U) -> Expression
     where
         Expression: From<U>,
     {
@@ -621,7 +623,7 @@ where
         Expressable(Expressand { tree })
     }
 
-    pub fn log<U>(self, base: U) -> Expression
+    pub fn log<U: Clone>(self, base: U) -> Expression
     where
         Expression: From<U>,
     {
@@ -641,6 +643,21 @@ where
         tree.finish_node();
         tree.push(ExprKind::Const(NEGONE));
         tree.finish_node();
+        tree.finish_node();
+
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub fn inv(self) -> Expression {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Exp);
+
+        tree.start_node(ExprKind::Mul);
+        tree.start_node(ExprKind::Ln);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+        tree.push(ExprKind::Const(NEGONE));
         tree.finish_node();
 
         tree.finish_node();

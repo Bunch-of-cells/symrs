@@ -5,11 +5,45 @@ pub mod tree;
 use crate::tree::{NodeId, Tree};
 pub use expression::*;
 pub use matrix::*;
-use num_complex::Complex64;
+pub use num_complex::Complex64;
 
 pub const ZERO: Complex64 = Complex64::new(0.0, 0.0);
 pub const NEGONE: Complex64 = Complex64::new(-1.0, 0.0);
 pub const ONE: Complex64 = Complex64::new(1.0, 0.0);
+pub const TOL: f64 = 1e-15;
+
+#[macro_export]
+macro_rules! c {
+    ($re:literal + $im:literal i) => {
+        num_complex::Complex64::new($re.into(), $im.into())
+    };
+    (i) => {
+        num_complex::Complex64::i()
+    };
+    ($re:expr) => {
+        num_complex::Complex64::new($re.into(), 0.0)
+    };
+    ($im:literal i) => {
+        num_complex::Complex64::new(0.0, $im.into())
+    };
+}
+
+pub fn printc(c: Complex64) {
+    match (c.re, c.im) {
+        (re, im) if re.abs() > TOL && im.abs() > TOL => {
+            println!("{re:.3e}+{im:.3e}i");
+        }
+        (re, _) if re.abs() > TOL => {
+            println!("{re:.3e}");
+        }
+        (_, im) if im.abs() > TOL => {
+            println!("{im:.3e}i");
+        }
+        (_, _) => {
+            println!("{:.3}", 0.0);
+        }
+    }
+}
 
 #[derive(Default, Clone, Debug)]
 pub struct System {
@@ -44,7 +78,14 @@ impl System {
         fn write_children(vars: &[String], tree: &Tree, id: NodeId, f: &mut String) {
             match tree.node(id).kind() {
                 ExprKind::Var(x) => *f += &vars[x.id],
-                ExprKind::Const(c) => f.push_str(&format!("{c:.3}")),
+                ExprKind::Const(c) => match (c.re, c.im) {
+                    (re, im) if re.abs() > TOL && im.abs() > TOL => {
+                        f.push_str(&format!("{re:.3e}+{im:.3e}i"))
+                    }
+                    (re, _) if re.abs() > TOL => f.push_str(&format!("{re:.3e}")),
+                    (_, im) if im.abs() > TOL => f.push_str(&format!("{im:.3e}i")),
+                    (_, _) => f.push_str(&format!("{:.3}", 0.0)),
+                },
                 ExprKind::Add => {
                     *f += "(";
                     let mut iter = tree.node(id).children().iter();

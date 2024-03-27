@@ -3,9 +3,7 @@ use std::{
     ops::{Add, Div, Index, IndexMut, Mul, Sub},
 };
 
-use num_complex::Complex64;
-
-use crate::{e, Expressable, Expression, Var, ONE, ZERO};
+use crate::{c, e, Expressable, Expression, Var, ONE, ZERO};
 
 #[derive(Debug, Clone)]
 pub struct SqMatrix<const N: usize>(pub [[Expression; N]; N]);
@@ -115,7 +113,7 @@ impl<const N: usize> SqMatrix<N> {
         for i in 0..N {
             for j in 0..N {
                 self.get_cofactor(&mut temp, i, j, N);
-                let sgn = Complex64::new((-2 * ((i + j) % 2) as i32 + 1) as f64, 0.0);
+                let sgn = c!(-2 * ((i + j) % 2) as i32 + 1);
                 adj[j][i] = e!(sgn) * temp.determinant(N - 1);
             }
         }
