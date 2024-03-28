@@ -1,11 +1,8 @@
-pub mod function;
 pub mod trig_func;
 pub mod var;
-use crate::tree::*;
-use crate::{NEGONE, ONE, ZERO};
-pub use function::*;
+use crate::{c, tree::*};
+use num_complex::{Complex64, ComplexFloat};
 pub use trig_func::*;
-use num_complex::Complex64;
 pub use var::*;
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
@@ -39,7 +36,7 @@ impl Expressand {
                 match trees[..] {
                     [_] | [] => trees.pop().unwrap_or_else(|| {
                         let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(ZERO));
+                        new_tree.push(ExprKind::Const(c!()));
                         new_tree
                     }),
                     _ => {
@@ -63,7 +60,7 @@ impl Expressand {
                 match trees[..] {
                     [_] | [] => trees.pop().unwrap_or_else(|| {
                         let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(ZERO));
+                        new_tree.push(ExprKind::Const(c!()));
                         new_tree
                     }),
                     _ => {
@@ -101,7 +98,7 @@ impl Expressand {
                 match trees[..] {
                     [_] | [] => trees.pop().unwrap_or_else(|| {
                         let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(ZERO));
+                        new_tree.push(ExprKind::Const(c!()));
                         new_tree
                     }),
                     _ => {
@@ -134,7 +131,7 @@ impl Expressand {
                 new_tree.start_node(ExprKind::Ln);
                 new_tree.push_tree(arg_tree);
                 new_tree.finish_node();
-                new_tree.push(ExprKind::Const(NEGONE));
+                new_tree.push(ExprKind::Const(c!(-)));
                 new_tree.finish_node();
 
                 new_tree.finish_node();
@@ -144,12 +141,12 @@ impl Expressand {
             }
             ExprKind::Var(v) if v.id == x.id => {
                 let mut new_tree = Tree::new();
-                new_tree.push(ExprKind::Const(ONE));
+                new_tree.push(ExprKind::Const(c!(+)));
                 new_tree
             }
             ExprKind::Var(_) | ExprKind::Const(_) => {
                 let mut new_tree = Tree::new();
-                new_tree.push(ExprKind::Const(ZERO));
+                new_tree.push(ExprKind::Const(c!()));
                 new_tree
             }
             ExprKind::Exp => {
@@ -167,31 +164,29 @@ impl Expressand {
                 new_tree.finish_node();
                 new_tree
             }
-            ExprKind::Func(f) => {
-                let args = self
-                    .tree
-                    .node(id)
-                    .children()
-                    .iter()
-                    .map(|&id| treeify_node(&self.tree, id))
-                    .collect::<Vec<_>>();
-                let mut d_args = self
-                    .tree
-                    .node(id)
-                    .children()
-                    .iter()
-                    .map(|&id| self.diff_rec(id, x))
-                    .collect::<Vec<_>>();
-                if args.len() == 1 {
-                    let mut tree = Tree::new();
-                    tree.start_node(ExprKind::Mul);
-                    tree.push_tree(f.diff(args));
-                    tree.push_tree(d_args.pop().unwrap());
-                    tree.finish_node();
-                    tree
-                } else {
-                    todo!()
-                }
+            ExprKind::Abs => {
+                let mut iter = self.tree.node(id).children().iter();
+                let z = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+
+                let node = treeify_node(&self.tree, id);
+                let z_tree = treeify_node(&self.tree, z);
+                let d_z = self.diff_rec(z, x);
+
+                let mut new_tree = Tree::new();
+                new_tree.start_node(ExprKind::Mul);
+                new_tree.push_tree(node);
+                new_tree.push_tree(d_z);
+                new_tree.start_node(ExprKind::Exp);
+                new_tree.start_node(ExprKind::Mul);
+                new_tree.push(ExprKind::Const(c!(-)));
+                new_tree.start_node(ExprKind::Ln);
+                new_tree.push_tree(z_tree);
+                new_tree.finish_node();
+                new_tree.finish_node();
+                new_tree.finish_node();
+                new_tree.finish_node();
+                new_tree
             }
         }
     }
@@ -215,9 +210,9 @@ impl Expressand {
 
                 if let [node] = arg_tree.sub_roots()[..] {
                     match node.kind {
-                        ExprKind::Const(c) if c == ONE => {
+                        ExprKind::Const(c) if c == c!(+) => {
                             let mut new_tree = Tree::new();
-                            new_tree.push(ExprKind::Const(ZERO));
+                            new_tree.push(ExprKind::Const(c!()));
                             return new_tree;
                         }
                         ExprKind::Exp => {
@@ -264,7 +259,7 @@ impl Expressand {
                         _ => trees.push(tree),
                     }
                 }
-                let mut consts = ZERO;
+                let mut consts = c!();
                 trees.retain(|tree| {
                     if let [Node {
                         kind: ExprKind::Const(x),
@@ -277,7 +272,7 @@ impl Expressand {
                         true
                     }
                 });
-                if consts != ZERO {
+                if consts != c!() {
                     trees.push({
                         let mut new_tree = Tree::new();
                         new_tree.push(ExprKind::Const(consts));
@@ -287,7 +282,7 @@ impl Expressand {
                 match trees.len() {
                     0 | 1 => trees.pop().unwrap_or_else(|| {
                         let mut new_tree = Tree::new();
-                        new_tree.push(ExprKind::Const(ZERO));
+                        new_tree.push(ExprKind::Const(c!()));
                         new_tree
                     }),
                     _ => {
@@ -323,17 +318,17 @@ impl Expressand {
                         [Node {
                             kind: ExprKind::Const(x),
                             ..
-                        }] if *x == ZERO => {
+                        }] if *x == c!() => {
                             trees.clear();
                             let mut new_tree = Tree::new();
-                            new_tree.push(ExprKind::Const(ZERO));
+                            new_tree.push(ExprKind::Const(c!()));
                             trees.push(new_tree);
                             break;
                         }
                         _ => trees.push(tree),
                     }
                 }
-                let mut consts = ONE;
+                let mut consts = c!(+);
                 trees.retain(|tree| {
                     if let [Node {
                         kind: ExprKind::Const(x),
@@ -346,7 +341,7 @@ impl Expressand {
                         true
                     }
                 });
-                if consts != ONE {
+                if consts != c!(+) {
                     trees.push({
                         let mut new_tree = Tree::new();
                         new_tree.push(ExprKind::Const(consts));
@@ -358,7 +353,7 @@ impl Expressand {
                     0 | 1 => {
                         return trees.pop().unwrap_or_else(|| {
                             let mut new_tree = Tree::new();
-                            new_tree.push(ExprKind::Const(ONE));
+                            new_tree.push(ExprKind::Const(c!(+)));
                             new_tree
                         })
                     }
@@ -423,9 +418,9 @@ impl Expressand {
 
                 if let [node] = exp_tree.sub_roots()[..] {
                     match node.kind {
-                        ExprKind::Const(c) if c == ZERO => {
+                        ExprKind::Const(c) if c == c!() => {
                             let mut new_tree = Tree::new();
-                            new_tree.push(ExprKind::Const(ONE));
+                            new_tree.push(ExprKind::Const(c!(+)));
                             return new_tree;
                         }
                         ExprKind::Ln => {
@@ -446,18 +441,24 @@ impl Expressand {
                 new_tree.finish_node();
                 new_tree
             }
-            ExprKind::Func(f) => {
-                let args = self
-                    .tree
-                    .node(id)
-                    .children()
-                    .iter()
-                    .map(|&id| self.simplify_rec(id));
-                let mut new_tree = Tree::new();
-                new_tree.start_node(ExprKind::Func(f));
-                for arg in args {
-                    new_tree.push_tree(arg);
+            ExprKind::Abs => {
+                let mut iter = self.tree.node(id).children().iter();
+                let x = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+
+                let x_tree = self.simplify_rec(x);
+
+                if let [node] = x_tree.sub_roots()[..] {
+                    if let ExprKind::Const(c) = node.kind {
+                        let mut new_tree = Tree::new();
+                        new_tree.push(ExprKind::Const(c!(c.abs())));
+                        return new_tree;
+                    }
                 }
+
+                let mut new_tree = Tree::new();
+                new_tree.start_node(ExprKind::Abs);
+                new_tree.push_tree(x_tree);
                 new_tree.finish_node();
                 new_tree
             }
@@ -505,15 +506,13 @@ impl Expressand {
                 let exp = self.eval_rec(exp, x);
                 exp.exp()
             }
-            ExprKind::Func(f) => f.eval(
-                &self
-                    .tree
-                    .node(id)
-                    .children()
-                    .iter()
-                    .map(|&id| self.eval_rec(id, x))
-                    .collect::<Vec<_>>(),
-            ),
+            ExprKind::Abs => {
+                let mut iter = self.tree.node(id).children().iter();
+                let exp = *iter.next().unwrap();
+                assert!(iter.next().is_none());
+                let exp = self.eval_rec(exp, x);
+                c!(exp.abs())
+            }
         }
     }
 
@@ -537,11 +536,7 @@ fn treeify_node(tree: &Tree, id: NodeId) -> Tree {
             new_tree.push(x);
             new_tree
         }
-        kind @ (ExprKind::Add
-        | ExprKind::Mul
-        | ExprKind::Exp
-        | ExprKind::Ln
-        | ExprKind::Func(_)) => {
+        kind @ (ExprKind::Add | ExprKind::Mul | ExprKind::Exp | ExprKind::Ln | ExprKind::Abs) => {
             let mut new_tree = Tree::new();
             new_tree.start_node(kind);
             for tre in tree
@@ -567,7 +562,7 @@ pub enum ExprKind {
     Mul,
     Exp,
     Ln,
-    Func(Function),
+    Abs,
 }
 
 #[derive(Debug, Clone)]
@@ -600,6 +595,14 @@ where
     pub fn exp(self) -> Expression {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Exp);
+        tree.push_tree(e!(self).0.tree);
+        tree.finish_node();
+        Expressable(Expressand { tree })
+    }
+
+    pub fn abs(self) -> Expression {
+        let mut tree = Tree::new();
+        tree.start_node(ExprKind::Abs);
         tree.push_tree(e!(self).0.tree);
         tree.finish_node();
         Expressable(Expressand { tree })
@@ -641,7 +644,7 @@ where
         tree.push_tree(e!(base).0.tree);
         tree.finish_node();
         tree.finish_node();
-        tree.push(ExprKind::Const(NEGONE));
+        tree.push(ExprKind::Const(c!(-)));
         tree.finish_node();
         tree.finish_node();
 
@@ -657,20 +660,8 @@ where
         tree.start_node(ExprKind::Ln);
         tree.push_tree(e!(self).0.tree);
         tree.finish_node();
-        tree.push(ExprKind::Const(NEGONE));
+        tree.push(ExprKind::Const(c!(-)));
         tree.finish_node();
-
-        tree.finish_node();
-        Expressable(Expressand { tree })
-    }
-
-    pub(crate) fn func(func: Function, args: Vec<Expression>) -> Expression {
-        let mut tree = Tree::new();
-        tree.start_node(ExprKind::Func(func));
-
-        for arg in args {
-            tree.push_tree(arg.0.tree)
-        }
 
         tree.finish_node();
         Expressable(Expressand { tree })
@@ -744,7 +735,7 @@ where
         tree.start_node(ExprKind::Add);
         tree.push_tree(e!(self).0.tree);
         tree.start_node(ExprKind::Mul);
-        tree.push(ExprKind::Const(NEGONE));
+        tree.push(ExprKind::Const(c!(-)));
         tree.push_tree(e!(rhs).0.tree);
         tree.finish_node();
         tree.finish_node();
@@ -768,7 +759,7 @@ where
         tree.start_node(ExprKind::Ln);
         tree.push_tree(e!(rhs).0.tree);
         tree.finish_node();
-        tree.push(ExprKind::Const(NEGONE));
+        tree.push(ExprKind::Const(c!(-)));
         tree.finish_node();
 
         tree.finish_node();
@@ -785,7 +776,7 @@ where
     fn neg(self) -> Self::Output {
         let mut tree = Tree::new();
         tree.start_node(ExprKind::Mul);
-        tree.push(ExprKind::Const(NEGONE));
+        tree.push(ExprKind::Const(c!(-)));
         tree.push_tree(e!(self).0.tree);
         tree.finish_node();
         Expressable(Expressand { tree })

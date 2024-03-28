@@ -4,14 +4,16 @@ pub fn sin<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    Expression::func(Function::Sin, vec![e!(z)])
+    let x = <Expression as From<Complex64>>::from(c!(;)) * e!(z);
+    (x.clone().exp() - (-x).exp()) * <Expression as From<Complex64>>::from(-0.5 * c!(;))
 }
 
 pub fn cos<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    Expression::func(Function::Cos, vec![e!(z)])
+    let x = <Expression as From<Complex64>>::from(Complex64::i()) * e!(z);
+    (x.clone().exp() + (-x).exp()) * <Expression as From<f64>>::from(0.5)
 }
 
 pub fn tan<T: Clone>(z: T) -> Expression
@@ -47,10 +49,10 @@ where
     Expression: From<T>,
 {
     let z = e!(z);
-    ((<Expression as From<Complex64>>::from(ONE) - z.clone().pow::<f64>(2.0)).pow::<f64>(0.5)
-        - <Expression as From<Complex64>>::from(c!(i)) * z)
+    ((<Expression as From<Complex64>>::from(c!(+)) - z.clone().pow::<f64>(2.0)).pow::<f64>(0.5)
+        - <Expression as From<Complex64>>::from(c!(;)) * z)
         .ln()
-        * <Expression as From<Complex64>>::from(c!(i))
+        * <Expression as From<Complex64>>::from(c!(;))
 }
 
 pub fn acos<T: Clone>(z: T) -> Expression
@@ -64,10 +66,10 @@ pub fn atan<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    let a = <Expression as From<Complex64>>::from(c!(i)) * e!(z);
+    let a = <Expression as From<Complex64>>::from(c!(;)) * e!(z);
     let b = (a.clone() - <Expression as From<f64>>::from(1.0))
         / (a + <Expression as From<f64>>::from(1.0));
-    <Expression as From<Complex64>>::from(c!(-0.5 i)) * b.ln()
+    <Expression as From<Complex64>>::from(c!(;-0.5)) * b.ln()
 }
 
 pub fn asec<T: Clone>(z: T) -> Expression
@@ -95,15 +97,16 @@ pub fn sinh<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    <Expression as From<Complex64>>::from(c!(-1 i))
-        * sin::<Expression>(<Expression as From<Complex64>>::from(c!(i)) * e!(z))
+    let x = e!(z);
+    (x.clone().exp() - (-x).exp()) * <Expression as From<f64>>::from(0.5)
 }
 
 pub fn cosh<T: Clone>(z: T) -> Expression
 where
     Expression: From<T>,
 {
-    cos::<Expression>(<Expression as From<Complex64>>::from(c!(i)) * e!(z))
+    let x = e!(z);
+    (x.clone().exp() + (-x).exp()) * <Expression as From<f64>>::from(0.5)
 }
 
 pub fn tanh<T: Clone>(z: T) -> Expression
@@ -139,7 +142,7 @@ where
     Expression: From<T>,
 {
     let z = e!(z);
-    ((z.clone().pow::<f64>(2.0) + <Expression as From<Complex64>>::from(ONE)).pow::<f64>(0.5) + z)
+    ((z.clone().pow::<f64>(2.0) + <Expression as From<Complex64>>::from(c!(+))).pow::<f64>(0.5) + z)
         .ln()
 }
 
@@ -148,7 +151,7 @@ where
     Expression: From<T>,
 {
     let z = e!(z);
-    ((z.clone().pow::<f64>(2.0) - <Expression as From<Complex64>>::from(ONE)).pow::<f64>(0.5) + z)
+    ((z.clone().pow::<f64>(2.0) - <Expression as From<Complex64>>::from(c!(+))).pow::<f64>(0.5) + z)
         .ln()
 }
 

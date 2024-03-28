@@ -7,23 +7,29 @@ pub use expression::*;
 pub use matrix::*;
 pub use num_complex::Complex64;
 
-pub const ZERO: Complex64 = Complex64::new(0.0, 0.0);
-pub const NEGONE: Complex64 = Complex64::new(-1.0, 0.0);
-pub const ONE: Complex64 = Complex64::new(1.0, 0.0);
 pub const TOL: f64 = 1e-15;
 
 #[macro_export]
 macro_rules! c {
-    ($re:literal + $im:literal i) => {
-        num_complex::Complex64::new($re.into(), $im.into())
-    };
-    (i) => {
+    (;) => {
         num_complex::Complex64::i()
+    };
+    () => {
+        num_complex::Complex64::new(0.0, 0.0)
+    };
+    (+) => {
+        num_complex::Complex64::new(1.0, 0.0)
+    };
+    (-) => {
+        num_complex::Complex64::new(-1.0, 0.0)
+    };
+    ($re:expr ; $im:expr) => {
+        num_complex::Complex64::new($re.into(), $im.into())
     };
     ($re:expr) => {
         num_complex::Complex64::new($re.into(), 0.0)
     };
-    ($im:literal i) => {
+    (;$im:expr) => {
         num_complex::Complex64::new(0.0, $im.into())
     };
 }
@@ -120,21 +126,17 @@ impl System {
                     assert!(iter.next().is_none());
                     *f += ")";
                 }
+                ExprKind::Abs => {
+                    *f += "|";
+                    let mut iter = tree.node(id).children().iter();
+                    write_children(vars, tree, *iter.next().unwrap(), f);
+                    assert!(iter.next().is_none());
+                    *f += "|";
+                }
                 ExprKind::ROOT => {
                     for &child in tree.node(id).children() {
                         write_children(vars, tree, child, f);
                     }
-                }
-                ExprKind::Func(func) => {
-                    *f += func.str();
-                    *f += "(";
-                    let mut iter = tree.node(id).children().iter();
-                    write_children(vars, tree, *iter.next().unwrap(), f);
-                    for &child in iter {
-                        *f += ",";
-                        write_children(vars, tree, child, f);
-                    }
-                    *f += ")";
                 }
             }
         }
