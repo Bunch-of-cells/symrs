@@ -1,4 +1,4 @@
-use symrs::{e, Expression, SqMatrix, System, Var, c};
+use symrs::{c, e, Expression, SqMatrix, System, Var};
 
 pub fn print_curvature<const N: usize>(curvature: RicciCurvature<N>, sys: &System) {
     let mut f = String::new();

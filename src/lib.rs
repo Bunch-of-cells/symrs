@@ -59,12 +59,17 @@ pub struct System {
 impl System {
     pub fn symbols<const N: usize>(&mut self, idents: &str) -> Result<[Var; N], String> {
         let idents = idents.split_ascii_whitespace().collect::<Vec<_>>();
-        assert!(idents.len() == N, "Inadequate amount of identifiers");
+        assert!(
+            idents.len() == N,
+            "Inadequate amount of identifiers, expected {} got {}",
+            N,
+            idents.len()
+        );
         let mut vars: [Var; N] = std::array::from_fn(|_| Var { id: 0 });
 
         for (i, &ident) in idents.iter().enumerate() {
-            if self.variables.iter().any(|var| var == ident) {
-                return Err(String::from("Alr exists"));
+            if let Some(var) = self.variables.iter().find(|&var| var == ident) {
+                return Err(format!("Variable with the name {var} already exists"));
             }
             let var = Var {
                 id: self.variables.len(),
@@ -166,7 +171,9 @@ impl System {
     {
         assert!(
             self.variables.len() == N,
-            "Inadequate number of values provided"
+            "Inadequate amount of identifiers, expected {} got {}",
+            N,
+            self.variables.len()
         );
         exp.ex().eval(&x)
     }
